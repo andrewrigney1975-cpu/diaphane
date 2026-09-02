@@ -34,4 +34,10 @@ Workspace: `F:\cef-build\` (outside the repo — the checkout is ~150 GB).
 ## Progress log
 - Set up depot_tools (full clone), git config, workspace.
 - Fixed: shallow depot_tools clone broke `automate-git.py` compat-version pin → full clone.
-- `automate-git.py` cloning `chromium/src` (long silent server-side enumeration phase).
+- `chromium/src` main tree checked out OK (~102 GB, 29.3M objects).
+- `gclient sync` (sub-deps) friction, resolved in stages:
+  - transient `git 128` on first pass → forced `--reset --delete_unversioned_trees` re-sync
+  - `third_party/litert/src` git-LFS: googlesource LFS mirror returns HTTP 405 on `batch`.
+    Blocked object is an **Android** prebuilt we don't need (Windows build) →
+    `GIT_LFS_SKIP_SMUDGE=1` + `filter.lfs.smudge/process --skip` leaves LFS pointers in place.
+    (`resync3.ps1`.) Revisit if a *Windows* LFS object turns out to be needed at build.
