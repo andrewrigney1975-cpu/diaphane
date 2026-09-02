@@ -1,3 +1,19 @@
+diff --git a/build/toolchain/win/toolchain.gni b/build/toolchain/win/toolchain.gni
+index 5a8e5195d5314..066aeb635bcad 100644
+--- a/build/toolchain/win/toolchain.gni
++++ b/build/toolchain/win/toolchain.gni
+@@ -575,7 +575,10 @@ template("msvc_toolchain") {
+ 
+     tool("alink") {
+       rspfile = "{{output}}.rsp"
+-      command = "$linker_wrapper$lib \"/OUT:{{output}}\" /nologo {{arflags}} \"@$rspfile\""
++      # diaphane M1: with safe_browsing_mode=0 (ungoogled) some static_library
++      # targets end up with zero inputs; /llvmlibempty makes lld-link write an
++      # empty .lib instead of warning (which /WX would turn into an error).
++      command = "$linker_wrapper$lib \"/OUT:{{output}}\" /nologo /llvmlibempty {{arflags}} \"@$rspfile\""
+       description = "LIB {{output}}"
+       outputs = [
+         # Ignore {{output_extension}} and always use .lib, there's no reason to
 diff --git a/build/win/message_compiler.py b/build/win/message_compiler.py
 index 4a64623550849..bc4130ca8bed9 100644
 --- a/build/win/message_compiler.py
