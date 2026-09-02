@@ -33,6 +33,20 @@ Workspace: `F:\cef-build\` (outside the repo — the checkout is ~150 GB).
 
 ## Progress log
 
+> **Lesson 4:** ungoogled `prune_binaries.py` CONTINGENT_PATHS deletes every Google
+> prebuilt toolchain: `third_party/llvm-build` (clang), `rust-toolchain`, `ninja`,
+> `siso/cipd`. When building *with* Google tooling, pass `--keep-contingent-paths`.
+> We ran without it, so `restore-clang.ps1` / `restore-rust.ps1` re-fetch the exact
+> packages from DEPS; ninja+siso restored via `gclient sync -j1 --nohooks` (cipd deps,
+> unaffected by the dirty patched src tree — patches survive).
+
+### State reached
+- Chromium 151.0.7922.174, deps synced, hooks green (rc.exe etc.)
+- 109/109 ungoogled patches applied clean · domain substitution done · DEPS not substituted
+- clang 23 restored · rust restored · CEF junctioned at src/cef
+- Next: `gclient sync -j1 --nohooks` (ninja/siso) → stage3 (gclient_hook → gn gen → autoninja cef)
+
+
 > **Lesson 1:** always `gclient sync --revision src@<tag>`. Bare `gclient sync` let
 > `src` roll to Chromium main (155). Fixed by `pinsync.ps1` → `refs/tags/151.0.7922.174`.
 >
