@@ -32,6 +32,16 @@ Workspace: `F:\cef-build\` (outside the repo — the checkout is ~150 GB).
   chosen to compensate.
 
 ## Progress log
+
+> **Lesson 1:** always `gclient sync --revision src@<tag>`. Bare `gclient sync` let
+> `src` roll to Chromium main (155). Fixed by `pinsync.ps1` → `refs/tags/151.0.7922.174`.
+>
+> **Lesson 2 (correct stage order):** run `gclient runhooks` (toolchain download:
+> clang, rust) *before* ungoogled prune/patch/domain-substitution. Domain substitution
+> rewrites `googleapis.com` inside `tools/clang/scripts/update.py` → clang download URL
+> becomes an unresolvable `9oo91eapis.qjz9zk` host. And pruning removes files gclient's
+> DEPS still references. `reset-and-hooks.ps1` resets to pristine and does hooks first.
+
 - Set up depot_tools (full clone), git config, workspace.
 - Fixed: shallow depot_tools clone broke `automate-git.py` compat-version pin → full clone.
 - `chromium/src` main tree checked out OK (~102 GB, 29.3M objects).
