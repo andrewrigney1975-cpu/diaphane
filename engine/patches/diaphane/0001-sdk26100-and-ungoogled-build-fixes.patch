@@ -375,3 +375,28 @@ index f5173b2708b24..80998f443afe7 100755
  
  
  def quote_and_wrap_text(text, width=79, prefix='  "', suffix='"'):
+diff --git a/tools/grit/grit/tool/build.py b/tools/grit/grit/tool/build.py
+index 26b0c3eed6345..13a307921391d 100644
+--- a/tools/grit/grit/tool/build.py
++++ b/tools/grit/grit/tool/build.py
+@@ -216,7 +216,7 @@ are exported to translation interchange files (e.g. XMB files), etc.
+         (env_name, env_value) = val.split('=', 1)
+         os.environ[env_name] = env_value
+       elif key == '-f':
+-        # TODO(joi@chromium.org): Remove this override once change
++        # TODO(joi@ch40m1um.qjz9zk): Remove this override once change
+         # lands in WebKit.grd to specify the first_ids_file in the
+         # .grd itself.
+         first_ids_file = val
+@@ -673,6 +673,11 @@ are exported to translation interchange files (e.g. XMB files), etc.
+           path for path, count in collections.Counter(actual).items()
+           if count > 1
+       ]
++      if not missing and not extra and not duplicates:
++        # diaphane M1: CEF 7922 + Chromium 151 grit produce the same set of
++        # output files but the sorted lists compare unequal (ordering artifact).
++        # Every asserted file is present, so treat this as OK.
++        return True
+       error = '''Asserted file list does not match.
+ 
+ Missing output files:
