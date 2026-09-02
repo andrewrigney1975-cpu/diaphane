@@ -70,3 +70,14 @@ Workspace: `F:\cef-build\` (outside the repo — the checkout is ~150 GB).
     Blocked object is an **Android** prebuilt we don't need (Windows build) →
     `GIT_LFS_SKIP_SMUDGE=1` + `filter.lfs.smudge/process --skip` leaves LFS pointers in place.
     (`resync3.ps1`.) Revisit if a *Windows* LFS object turns out to be needed at build.
+
+> **Lesson 5:** NEVER have the `src/cef` junction present during
+> `gclient sync --delete_unversioned_trees` — it walks the junction and deletes the
+> real CEF checkout (incl. `.git`). Create the junction only after all `gclient sync`
+> runs are done. stage3 (`gclient_hook.py` → `gn gen` → `autoninja`) never calls sync.
+
+### Clean state reached (finally)
+- sync 0 · runhooks 0 · prune `--keep-contingent-paths` · 109 patches (825 ops, 0 fail) · domsub 0
+- clang=True rust=True ninja=True siso=True · CEF re-cloned @ 7922 · src/cef junction live
+- 13041 files changed in src (patches + domsub only; contingent paths kept)
+- RUNNING: stage3 — CEF project gen → gn gen (+ungoogled flags.gn) → autoninja cef
