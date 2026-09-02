@@ -36,11 +36,16 @@ Workspace: `F:\cef-build\` (outside the repo — the checkout is ~150 GB).
 > **Lesson 1:** always `gclient sync --revision src@<tag>`. Bare `gclient sync` let
 > `src` roll to Chromium main (155). Fixed by `pinsync.ps1` → `refs/tags/151.0.7922.174`.
 >
-> **Lesson 2 (correct stage order):** run `gclient runhooks` (toolchain download:
-> clang, rust) *before* ungoogled prune/patch/domain-substitution. Domain substitution
-> rewrites `googleapis.com` inside `tools/clang/scripts/update.py` → clang download URL
-> becomes an unresolvable `9oo91eapis.qjz9zk` host. And pruning removes files gclient's
-> DEPS still references. `reset-and-hooks.ps1` resets to pristine and does hooks first.
+> **Lesson 2 (correct stage order):** ungoogled prune/patch/domain-substitution must run
+> *after* the toolchain is present. clang/rust come from a **DEPS entry** (`src/third_party/
+> llvm-build/Release+Asserts`), downloaded by `gclient sync` — not a hook. Domain substitution
+> rewrites `googleapis.com` inside `tools/clang/scripts/update.py` (→ unresolvable
+> `9oo91eapis.qjz9zk`), and pruning removes files DEPS references.
+>
+> **Lesson 3:** `git reset --hard` on `src` does NOT revert domain substitution inside
+> `src/third_party/depot_tools`, `src/tools/clang`, etc. — those are separate git repos.
+> Reset each. A domain-substituted `depot_tools/lockfile.py` + `-j` parallel sync workers
+> racing the gsutil bootstrap lock = `Failed to lock handle (error code: 6)`. Use `-j1`.
 
 - Set up depot_tools (full clone), git config, workspace.
 - Fixed: shallow depot_tools clone broke `automate-git.py` compat-version pin → full clone.
