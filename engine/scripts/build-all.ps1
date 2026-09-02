@@ -31,7 +31,7 @@ $env:SDK_VERSION          = "10.0.26100.0"
 # (ungoogled flags.gn is already compatible). Keep our config minimal: codecs + siso.
 # Non-official release build for the M1 gate (faster; official/LTO/PGO is a later pass).
 $env:GN_DEFINES = "proprietary_codecs=true ffmpeg_branding=Chrome use_siso=true"
-$env:GN_ARGUMENTS = "--ide=none"
+if (Test-Path env:GN_ARGUMENTS) { Remove-Item env:GN_ARGUMENTS }
 $py = "vpython3.bat"
 
 Write-Host "=== 1. reset src pristine ==="
@@ -39,8 +39,10 @@ git -C $src reset --hard refs/tags/151.0.7922.174 2>&1 | Select-Object -Last 1
 git -C $dt reset --hard 2>&1 | Select-Object -Last 1
 & "$dt\bootstrap\win_tools.bat" *> $null
 
-Write-Host "=== 2. prune --keep-contingent-paths ==="
-& $py "$ung\utils\prune_binaries.py" $src "$ung\pruning.list" --keep-contingent-paths *> "$root\ba-prune.log"
+# Step 2 (prune) intentionally skipped: prune removes prebuilt libs the build needs
+# (rust vendor .lib, .tlb, .dll) even with --keep-contingent-paths. Pruning only matters
+# for redistribution licensing, not a local build. Privacy = patches + domsub + GN flags.
+Write-Host "=== 2. prune SKIPPED (local build) ==="
 
 Write-Host "=== 3. CEF gclient_hook (patcher + args.gn + gn gen) -- ONCE ==="
 Set-Location $src
@@ -52,6 +54,7 @@ Write-Host "=== 4. ungoogled patches on top (fuzz 3, skip conflicts) ==="
 $applied=0; $skipped=@()
 Get-Content "$ung\patches\series" | Where-Object { $_ -and -not $_.StartsWith('#') } | ForEach-Object {
     $pf = Join-Path "$ung\patches" $_
+    if ($_ -match 'disable-rlz') { $skipped += $_; return }  # breaks GN: CEF forces enable_rlz=true
     & $env:PATCH_BIN -p1 --forward --fuzz=3 --no-backup-if-mismatch -d $src -i $pf --dry-run *> $null
     if ($LASTEXITCODE -eq 0) { & $env:PATCH_BIN -p1 --forward --fuzz=3 --no-backup-if-mismatch -d $src -i $pf *> $null; $applied++ }
     else { $skipped += $_ }
