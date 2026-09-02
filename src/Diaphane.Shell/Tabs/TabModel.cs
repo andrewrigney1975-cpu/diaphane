@@ -1,0 +1,140 @@
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Runtime.CompilerServices;
+using Diaphane.Shell.Engine;
+
+namespace Diaphane.Shell.Tabs;
+
+public enum TabKind { Standard, Sandbox }
+
+public sealed class TabModel : INotifyPropertyChanged
+{
+    private readonly IBrowserView _view;
+    private string _title = "New Tab";
+    private string _url = "";
+    private bool _isLoading;
+
+    public TabModel(IBrowserView view, TabKind kind, Guid contextId)
+    {
+        _view = view;
+        Kind = kind;
+        ContextId = contextId;
+        _view.NavigationStateChanged += (_, s) =>
+        {
+            Url = s.Url;
+            Title = string.IsNullOrEmpty(s.Title) ? s.Url : s.Title;
+            IsLoading = s.IsLoading;
+        };
+    }
+
+    public Guid Id { get; } = Guid.NewGuid();
+    public TabKind Kind { get; }
+    public Guid ContextId { get; }
+    public bool IsSandbox => Kind == TabKind.Sandbox;
+
+    public string Title { get => _title; private set => Set(ref _title, value); }
+    public string Url { get => _url; private set => Set(ref _url, value); }
+    public bool IsLoading { get => _isLoading; private set => Set(ref _isLoading, value); }
+
+    public bool CanGoBack => _view.CanGoBack;
+    public bool CanGoForward => _view.CanGoForward;
+
+    public void Navigate(string url) => _view.Navigate(url);
+    public void Reload() => _view.Reload();
+    public void Back() => _view.GoBack();
+    public void Forward() => _view.GoForward();
+    internal IBrowserView View => _view;
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+    private void Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
+    {
+        if (EqualityComparer<T>.Default.Equals(field, value)) return;
+        field = value;
+        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+    }
+}
+
+/// <summary>
+/// Owns every tab and the request contexts they sit on. Standard tabs share one
+/// persistent context. Each Sandbox <em>window</em> gets its own in-memory context,
+/// disposed (and its RAM released) when the last tab on it closes — leaving no trace.
+/// </summary>
+public sealed class TabManager : IDisposable
+{
+    private readonly IBrowserEngine _engine;
+    private readonly nint _hostHwnd;
+    private readonly Dictionary<Guid, IRequestContext> _sandboxContexts = new();
+
+    public TabManager(IBrowserEngine engine, nint hostHwnd)
+    {
+        _engine = engine;
+        _hostHwnd = hostHwnd;
+    }
+
+    public ObservableCollection<TabModel> Tabs { get; } = new();
+    public TabModel? Active { get; private set; }
+
+    public TabModel NewStandardTab(string? url = null)
+    {
+        var view = _engine.CreateView(_engine.StandardContext, _hostHwnd);
+        var tab = new TabModel(view, TabKind.Standard, _engine.StandardContext.Id);
+        AddAndActivate(tab);
+        view.Navigate(url ?? "diaphane://newtab");
+        return tab;
+    }
+
+    /// <summary>Open a Sandbox tab. Pass an existing sandbox group id to share its
+    /// context (link-through within a window); omit it to start a brand-new isolated one.</summary>
+    public TabModel NewSandboxTab(Guid? group = null, string? url = null, string? proxyUri = null)
+    {
+        IRequestContext ctx;
+        if (group is { } g && _sandboxContexts.TryGetValue(g, out var existing))
+            ctx = existing;
+        else
+        {
+            ctx = _engine.CreateContext(RequestContextOptions.Sandbox(proxyUri));
+            _sandboxContexts[ctx.Id] = ctx;
+        }
+
+        var view = _engine.CreateView(ctx, _hostHwnd);
+        var tab = new TabModel(view, TabKind.Sandbox, ctx.Id);
+        AddAndActivate(tab);
+        view.Navigate(url ?? "diaphane://newtab");
+        return tab;
+    }
+
+    public void Close(TabModel tab)
+    {
+        Tabs.Remove(tab);
+        tab.View.Dispose();
+
+        if (tab.IsSandbox && Tabs.All(t => t.ContextId != tab.ContextId)
+            && _sandboxContexts.Remove(tab.ContextId, out var ctx))
+        {
+            ctx.Dispose(); // in-memory partition gone — no history, no cookies, nothing persisted
+        }
+
+        if (ReferenceEquals(Active, tab))
+            Activate(Tabs.LastOrDefault());
+    }
+
+    public void Activate(TabModel? tab)
+    {
+        foreach (var t in Tabs) t.View.SetVisible(ReferenceEquals(t, tab));
+        Active = tab;
+        tab?.View.SetFocus(true);
+    }
+
+    private void AddAndActivate(TabModel tab)
+    {
+        Tabs.Add(tab);
+        Activate(tab);
+    }
+
+    public void Dispose()
+    {
+        foreach (var t in Tabs) t.View.Dispose();
+        foreach (var c in _sandboxContexts.Values) c.Dispose();
+        _sandboxContexts.Clear();
+    }
+}

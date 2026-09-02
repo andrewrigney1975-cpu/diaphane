@@ -1,0 +1,11 @@
+bin/
+obj/
+.vs/
+*.user
+engine/download-dir/
+engine/out/
+engine/third_party/ungoogled/*/
+*.dll
+!engine/**/expected/*.dll
+artifacts/
+TestResults/
