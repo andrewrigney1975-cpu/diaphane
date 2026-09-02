@@ -30,7 +30,7 @@ $env:SDK_VERSION          = "10.0.26100.0"
 # CEF requires enable_widevine=true / clang_use_chrome_plugins=false / optimize_webui=true
 # (ungoogled flags.gn is already compatible). Keep our config minimal: codecs + siso.
 # Non-official release build for the M1 gate (faster; official/LTO/PGO is a later pass).
-$env:GN_DEFINES = "proprietary_codecs=true ffmpeg_branding=Chrome use_siso=true"
+$env:GN_DEFINES = "proprietary_codecs=true ffmpeg_branding=Chrome use_siso=true translate_genders=false"
 if (Test-Path env:GN_ARGUMENTS) { Remove-Item env:GN_ARGUMENTS }
 $py = "vpython3.bat"
 
