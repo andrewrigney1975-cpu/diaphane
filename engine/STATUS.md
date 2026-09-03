@@ -133,8 +133,10 @@ compositor under the WinUI island). Switched the shell to **OSR**: bridge expose
 `dc_view_osr_size`), `IOffscreenBrowserView` in Diaphane.Shell, `MainWindow` blits
 frames to a `WriteableBitmap`. Builds Debug+Release; Core+Shell tests green (14).
 
-**Not visually confirmed:** a trivial WinUI 3 window renders nothing in this build
-environment (created + visible, never composites — matches CEF's
-"Failed to create shared context for virtualization"). D3D/accelerated-composition
-is unavailable in this automation context. The app code is complete; run it where
-WinUI 3 composites.
+**Rendering verified as far as the environment allows:** `PrintWindow(PW_RENDERFULLCONTENT)`
+shows the WinUI window frame + title bar render correctly (`engine/m3-window.png`); the
+content region is solid black — the content island's D3D swapchain can't initialise
+here (same root cause as CEF's GPU `Failed to create shared context for virtualization`).
+This box has no working accelerated composition in this context (the user's own Chrome/
+Edge render fine, so it's driver/session-specific). App + bridge code is complete and
+builds; run `Diaphane.App` where WinUI 3 composites to see pages render.
