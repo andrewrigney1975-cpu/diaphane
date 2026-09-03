@@ -62,7 +62,7 @@ $denyRe = 'add-flag|add-flags-for|add-ungoogled-flag-headers|add-components-ungo
           'add-credits|add-extra-channel-info|add-suggestions-url-field|first-run-page|' +
           'keep-expired-flags|remove-uneeded-ui|enable-menu-on-reload-button|' +
           'enable-paste-and-go-new-tab-button|restore-classic-ntp|disable-formatting-in-omnibox|' +
-          'disable-rlz'
+          'remove-unused-preferences-fields|disable-rlz'
 $applied=0; $skipped=@()
 Get-Content "$ung\patches\series" | Where-Object { $_ -and -not $_.StartsWith('#') } | ForEach-Object {
     $p = $_
