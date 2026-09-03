@@ -71,3 +71,18 @@ public interface IBrowserView : IDisposable
 }
 
 public sealed record NavigationState(string Url, string Title, bool IsLoading, bool CanGoBack, bool CanGoForward, double Progress);
+
+/// <summary>Off-screen-rendered browser: the shell owns the surface and forwards input.</summary>
+public interface IOffscreenBrowserView : IBrowserView
+{
+    /// <summary>Raised on the CEF UI thread with a pointer to a top-down BGRA32 frame, valid only for the call.</summary>
+    event EventHandler<FramePaint>? FramePainted;
+
+    void ResizeSurface(int width, int height);
+    void SendMouseMove(int x, int y, bool leaving);
+    void SendMouseButton(int x, int y, int button, bool down, int clickCount);
+    void SendMouseWheel(int x, int y, int deltaX, int deltaY);
+    void SendKey(bool isDown, int windowsKeyCode, int nativeKeyCode, uint modifiers, char character);
+}
+
+public readonly record struct FramePaint(nint Bgra, int Width, int Height, int DirtyX, int DirtyY, int DirtyW, int DirtyH);

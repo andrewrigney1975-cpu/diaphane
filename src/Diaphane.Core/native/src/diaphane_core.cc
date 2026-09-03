@@ -343,6 +343,62 @@ void dc_view_close(const char* view_id) {
   g_views.erase(view_id);
 }
 
+// ---- windowless input ----
+static CefMouseEvent MakeMouse(int x, int y) {
+  CefMouseEvent e;
+  e.x = x;
+  e.y = y;
+  e.modifiers = 0;
+  return e;
+}
+
+void dc_view_osr_size(const char* view_id, int32_t width, int32_t height) {
+  auto c = LookupView(view_id);
+  if (!c) return;
+  c->set_size(width, height);
+  if (auto b = c->browser()) b->GetHost()->WasResized();
+}
+
+void dc_view_mouse_move(const char* view_id, int32_t x, int32_t y, int32_t leaving) {
+  if (auto b = LookupBrowser(view_id))
+    b->GetHost()->SendMouseMoveEvent(MakeMouse(x, y), leaving != 0);
+}
+
+void dc_view_mouse_button(const char* view_id, int32_t x, int32_t y,
+                          int32_t button, int32_t down, int32_t click_count) {
+  auto b = LookupBrowser(view_id);
+  if (!b) return;
+  cef_mouse_button_type_t t = button == 2 ? MBT_RIGHT : button == 1 ? MBT_MIDDLE : MBT_LEFT;
+  b->GetHost()->SendMouseClickEvent(MakeMouse(x, y), t, down == 0,
+                                    click_count > 0 ? click_count : 1);
+}
+
+void dc_view_mouse_wheel(const char* view_id, int32_t x, int32_t y,
+                         int32_t delta_x, int32_t delta_y) {
+  if (auto b = LookupBrowser(view_id))
+    b->GetHost()->SendMouseWheelEvent(MakeMouse(x, y), delta_x, delta_y);
+}
+
+void dc_view_key(const char* view_id, int32_t is_down, int32_t windows_key_code,
+                 int32_t native_key_code, uint32_t modifiers, uint16_t character) {
+  auto b = LookupBrowser(view_id);
+  if (!b) return;
+  CefKeyEvent ke;
+  ke.modifiers = modifiers;
+  ke.windows_key_code = windows_key_code;
+  ke.native_key_code = native_key_code;
+  ke.is_system_key = false;
+  if (character != 0) {
+    ke.type = KEYEVENT_CHAR;
+    ke.character = character;
+    ke.unmodified_character = character;
+    b->GetHost()->SendKeyEvent(ke);
+    return;
+  }
+  ke.type = is_down ? KEYEVENT_RAWKEYDOWN : KEYEVENT_KEYUP;
+  b->GetHost()->SendKeyEvent(ke);
+}
+
 const char* dc_version(void) {
   if (g_version_str.empty())
     g_version_str = std::string("CEF ") + CEF_VERSION;

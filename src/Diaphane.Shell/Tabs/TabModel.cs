@@ -46,6 +46,9 @@ public sealed class TabModel : INotifyPropertyChanged
     public void SetBounds(int x, int y, int width, int height) => _view.SetBounds(x, y, width, height);
     internal IBrowserView View => _view;
 
+    /// <summary>Non-null when the engine renders off-screen (the shell owns the surface).</summary>
+    public IOffscreenBrowserView? Offscreen => _view as IOffscreenBrowserView;
+
     public event PropertyChangedEventHandler? PropertyChanged;
     private void Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
     {

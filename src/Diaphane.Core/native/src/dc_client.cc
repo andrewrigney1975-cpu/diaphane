@@ -60,3 +60,12 @@ void DcClient::OnFaviconURLChange(CefRefPtr<CefBrowser> browser,
 void DcClient::GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rect) {
   rect.Set(0, 0, width_ > 0 ? width_ : 1280, height_ > 0 ? height_ : 800);
 }
+
+void DcClient::OnPaint(CefRefPtr<CefBrowser> browser, PaintElementType type,
+                       const RectList& dirtyRects, const void* buffer,
+                       int width, int height) {
+  if (type != PET_VIEW || !cb_.on_paint) return;
+  CefRect d = dirtyRects.empty() ? CefRect(0, 0, width, height) : dirtyRects.front();
+  cb_.on_paint(view_id_.c_str(), buffer, width, height,
+               d.x, d.y, d.width, d.height, cb_.user);
+}

@@ -132,9 +132,6 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
             _bookmarks.Add(ActiveTab.Title, url);
     }
 
-    /// <summary>Content-area pixel rect for the CEF child window of the active tab.</summary>
-    public void SetBrowserBounds(int x, int y, int w, int h) => _tabs?.SetActiveBounds(x, y, w, h);
-
     public IReadOnlyList<Suggestion> Suggest(string typed)
     {
         if (string.IsNullOrWhiteSpace(typed)) return Array.Empty<Suggestion>();

@@ -30,6 +30,11 @@ internal static partial class NativeMethods
     internal delegate void ViewLifecycleCb(
         [MarshalAs(UnmanagedType.LPUTF8Str)] string viewId, IntPtr user);
 
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void PaintCb(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string viewId, IntPtr bgra,
+        int width, int height, int dx, int dy, int dw, int dh, IntPtr user);
+
     [StructLayout(LayoutKind.Sequential)]
     internal struct ViewCallbacks
     {
@@ -39,6 +44,7 @@ internal static partial class NativeMethods
         public LoadEndCb OnLoadEnd;
         public ViewLifecycleCb OnCreated;
         public ViewLifecycleCb OnClosed;
+        public PaintCb OnPaint;
         public IntPtr User;
     }
 
@@ -113,6 +119,17 @@ internal static partial class NativeMethods
     internal static partial void dc_view_set_focus(string viewId, int focused);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void dc_view_close(string viewId);
+
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dc_view_osr_size(string viewId, int width, int height);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dc_view_mouse_move(string viewId, int x, int y, int leaving);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dc_view_mouse_button(string viewId, int x, int y, int button, int down, int clickCount);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dc_view_mouse_wheel(string viewId, int x, int y, int deltaX, int deltaY);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dc_view_key(string viewId, int isDown, int windowsKeyCode, int nativeKeyCode, uint modifiers, ushort character);
 
     [LibraryImport(Dll)]
     internal static partial IntPtr dc_version();

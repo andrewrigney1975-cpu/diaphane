@@ -42,11 +42,11 @@ class DcClient : public CefClient,
   void OnFaviconURLChange(CefRefPtr<CefBrowser> browser,
                           const std::vector<CefString>& icon_urls) override;
 
-  // CefRenderHandler (windowless / OSR — no-op paint for headless)
+  // CefRenderHandler (windowless / OSR)
   void GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rect) override;
   void OnPaint(CefRefPtr<CefBrowser> browser, PaintElementType type,
                const RectList& dirtyRects, const void* buffer,
-               int width, int height) override {}
+               int width, int height) override;
 
  private:
   void PushNavState(CefRefPtr<CefBrowser> browser, bool is_loading,

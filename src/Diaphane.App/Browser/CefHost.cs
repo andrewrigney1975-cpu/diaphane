@@ -27,8 +27,8 @@ public sealed class CefHost : IDisposable
             RootCacheDir: EnsureDir(Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "Diaphane", "UserData")),
-            Windowless: false,
-            NoSandbox: true));   // TODO(M-later): validate the CEF sandbox + helper, then flip.
+            Windowless: true,    // OSR — the shell owns the surface (windowed hosting hits the GPU child-window NOTREACHED)
+            NoSandbox: true));    // TODO(M-later): validate the CEF sandbox + helper, then flip.
 
         _pumpTimer = _dispatcher.CreateTimer();
         _pumpTimer.IsRepeating = false;

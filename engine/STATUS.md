@@ -124,3 +124,17 @@ compositor (shared process). This is the architecture-doc §04 airspace problem.
 passes). Expose `OnPaint` BGRA through the C ABI → `WriteableBitmap` in a `SwapChainPanel`/
 `Image` → forward mouse/keyboard/IME/DPI to `CefBrowserHost::SendMouse*Event`. See
 `src/Diaphane.App/README.md`.
+
+## M3 update — OSR rendering path
+
+Windowed `SetAsChild` hosting hits `child_window_win.cc:117 NOTREACHED` (GPU
+compositor under the WinUI island). Switched the shell to **OSR**: bridge exposes
+`OnPaint` BGRA + windowless input (`dc_view_mouse_*` / `dc_view_key` /
+`dc_view_osr_size`), `IOffscreenBrowserView` in Diaphane.Shell, `MainWindow` blits
+frames to a `WriteableBitmap`. Builds Debug+Release; Core+Shell tests green (14).
+
+**Not visually confirmed:** a trivial WinUI 3 window renders nothing in this build
+environment (created + visible, never composites — matches CEF's
+"Failed to create shared context for virtualization"). D3D/accelerated-composition
+is unavailable in this automation context. The app code is complete; run it where
+WinUI 3 composites.

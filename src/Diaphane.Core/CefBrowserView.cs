@@ -4,7 +4,7 @@ using static Diaphane.Core.NativeMethods;
 namespace Diaphane.Core;
 
 /// <summary>One CEF browser, bound to a request context. Marshals CEF events to the shell.</summary>
-internal sealed class CefBrowserView : IBrowserView
+internal sealed class CefBrowserView : IOffscreenBrowserView
 {
     // Delegate instances rooted for the view's lifetime — native holds raw pointers to these.
     private readonly ViewCallbacks _cb;
@@ -14,6 +14,7 @@ internal sealed class CefBrowserView : IBrowserView
     private readonly LoadEndCb _loadCb;
     private readonly ViewLifecycleCb _createdCb;
     private readonly ViewLifecycleCb _closedCb;
+    private readonly PaintCb _paintCb;
 
     private NavigationState _state = new("about:blank", "", true, false, false, 0);
     private bool _disposed;
@@ -27,6 +28,7 @@ internal sealed class CefBrowserView : IBrowserView
     public event EventHandler<NavigationState>? NavigationStateChanged;
     public event EventHandler<string>? TitleChanged;
     public event EventHandler<string>? FaviconUrlChanged;
+    public event EventHandler<FramePaint>? FramePainted;
 
     public CefBrowserView(string contextId, nint hostHwnd, int width = 1280, int height = 800)
     {
@@ -57,6 +59,8 @@ internal sealed class CefBrowserView : IBrowserView
         };
         _createdCb = (_, _) => { };
         _closedCb = (_, _) => Closed?.Invoke(this, EventArgs.Empty);
+        _paintCb = (_, bgra, w, h, dx, dy, dw, dh, _) =>
+            FramePainted?.Invoke(this, new FramePaint(bgra, w, h, dx, dy, dw, dh));
 
         _cb = new ViewCallbacks
         {
@@ -66,6 +70,7 @@ internal sealed class CefBrowserView : IBrowserView
             OnLoadEnd = _loadCb,
             OnCreated = _createdCb,
             OnClosed = _closedCb,
+            OnPaint = _paintCb,
             User = IntPtr.Zero,
         };
 
@@ -83,6 +88,14 @@ internal sealed class CefBrowserView : IBrowserView
     public void SetBounds(int x, int y, int width, int height) => dc_view_set_bounds(NativeId, x, y, width, height);
     public void SetVisible(bool visible) => dc_view_set_visible(NativeId, visible ? 1 : 0);
     public void SetFocus(bool focused) => dc_view_set_focus(NativeId, focused ? 1 : 0);
+
+    public void ResizeSurface(int width, int height) => dc_view_osr_size(NativeId, width, height);
+    public void SendMouseMove(int x, int y, bool leaving) => dc_view_mouse_move(NativeId, x, y, leaving ? 1 : 0);
+    public void SendMouseButton(int x, int y, int button, bool down, int clickCount) =>
+        dc_view_mouse_button(NativeId, x, y, button, down ? 1 : 0, clickCount);
+    public void SendMouseWheel(int x, int y, int deltaX, int deltaY) => dc_view_mouse_wheel(NativeId, x, y, deltaX, deltaY);
+    public void SendKey(bool isDown, int windowsKeyCode, int nativeKeyCode, uint modifiers, char character) =>
+        dc_view_key(NativeId, isDown ? 1 : 0, windowsKeyCode, nativeKeyCode, modifiers, character);
 
     public void Dispose()
     {

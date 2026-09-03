@@ -21,20 +21,27 @@ Requires `src/Diaphane.Core/native/build/bin` (run `native/build.ps1` first) —
   machine's real Chrome/Edge profile — bookmarks, session, everything. Never do that.
 - CEF initialises and spawns its subprocesses (via `diaphane_helper.exe`).
 
-## What's NOT working — the CEF page pixels don't reach the window
-Root cause: `FATAL:ui\gl\child_window_win.cc:117 NOTREACHED` in the GPU process.
-Chromium's **windowed** GPU compositing creates a GL child window of the browser
-HWND; when that HWND is `SetAsChild` of the WinUI content island the hierarchy
-trips a NOTREACHED and the GPU process crash-loops, so nothing paints (and the
-empty child window would occlude the chrome — it's created hidden for that reason).
+## Rendering: OSR path wired; WinUI 3 compositor not verified here
 
-This is the "airspace" problem from the architecture doc §04. Process-wide GPU
-switches (`--disable-gpu` / `--in-process-gpu` / `--use-angle`) are not an option —
-they break WinUI 3's own compositor, which shares this process.
+The shell renders CEF **off-screen** (windowless): `CefHost` inits the engine with
+`Windowless: true`, `CefBrowserView` implements `IOffscreenBrowserView`, and
+`MainWindow` blits each `OnPaint` BGRA frame into a `WriteableBitmap` behind an
+`Image`, forwarding pointer / wheel / key / char input to
+`CefBrowserHost::SendMouse*Event` / `SendKeyEvent`.
 
-**Fix (M3 completion):** OSR / windowless rendering. The M2 bridge already runs
-CEF windowless (headless test passes); expose `OnPaint`'s BGRA buffer through the
-C ABI, blit it to a `WriteableBitmap` in a `SwapChainPanel`/`Image`, and forward
-mouse/keyboard/IME/DPI from that element to `CefBrowserHost::SendMouse*Event` etc.
-Alternatively host via `DesktopChildSiteBridge` with a top-level (not child) CEF
-window positioned over the region.
+Windowed hosting (`SetAsChild`) was tried first and abandoned: Chromium's windowed
+GPU compositor hits `FATAL:ui\gl\child_window_win.cc:117 NOTREACHED` when the browser
+HWND is a child of the WinUI content island (an interposing plain-Win32 child window
+didn't help). Process-wide GPU switches fix that crash but break WinUI 3's own
+compositor — they share the process. OSR sidesteps all of it.
+
+**Not visually verified in this build environment:** a bare
+`<Grid Background="Crimson"><TextBlock/></Grid>` WinUI 3 window also renders nothing
+here — the window is created and visible but never composites (same signature as
+CEF's GPU process: `Failed to create shared context for virtualization`). This
+machine's D3D/GPU state doesn't support accelerated composition in this context;
+the user's own Chrome/Edge render fine, so it is environment- or driver-specific.
+Run `Diaphane.App` on a box where WinUI 3 composites to see it.
+
+Debug: unhandled exceptions and paint failures are appended to
+`%TEMP%\diaphane-app.log`.

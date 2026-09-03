@@ -67,10 +67,18 @@
             </Button>
         </Grid>
 
-        <!-- where the CEF child window lives -->
-        <Border x:Name="BrowserRegion" Grid.Row="2"
-                Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                SizeChanged="OnBrowserRegionChanged" />
+        <!-- CEF off-screen surface -->
+        <Grid x:Name="BrowserRegion" Grid.Row="2"
+              Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+              SizeChanged="OnBrowserRegionChanged">
+            <Image x:Name="BrowserImage" Stretch="None"
+                   HorizontalAlignment="Left" VerticalAlignment="Top"
+                   IsTabStop="True" ManipulationMode="None"
+                   PointerMoved="OnPointerMoved" PointerPressed="OnPointerPressed"
+                   PointerReleased="OnPointerReleased" PointerExited="OnPointerExited"
+                   PointerWheelChanged="OnPointerWheel"
+                   KeyDown="OnKeyDown" KeyUp="OnKeyUp" CharacterReceived="OnChar" />
+        </Grid>
         <ProgressBar x:Name="LoadBar" Grid.Row="2" VerticalAlignment="Top" IsIndeterminate="True"
                      Visibility="Collapsed" />
     </Grid>

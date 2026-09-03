@@ -32,6 +32,12 @@ typedef void (*dc_favicon_cb)(const char* view_id, const char* icon_url, void* u
 typedef void (*dc_load_end_cb)(const char* view_id, int32_t http_status_code, void* user);
 typedef void (*dc_created_cb)(const char* view_id, void* user);
 typedef void (*dc_closed_cb)(const char* view_id, void* user);
+// Windowless (OSR) paint: |bgra| is width*height*4 BGRA32, top-down, valid only
+// for the duration of the call. |dirty_*| bounds the changed region.
+typedef void (*dc_paint_cb)(const char* view_id, const void* bgra,
+                            int32_t width, int32_t height,
+                            int32_t dirty_x, int32_t dirty_y,
+                            int32_t dirty_w, int32_t dirty_h, void* user);
 
 typedef struct dc_view_callbacks {
   dc_nav_state_cb on_nav_state;
@@ -40,6 +46,7 @@ typedef struct dc_view_callbacks {
   dc_load_end_cb  on_load_end;
   dc_created_cb   on_created;
   dc_closed_cb    on_closed;
+  dc_paint_cb     on_paint;      // windowless only
   void*           user;
 } dc_view_callbacks;
 
@@ -88,6 +95,17 @@ DC_API void    dc_view_set_bounds(const char* view_id, int32_t x, int32_t y, int
 DC_API void    dc_view_set_visible(const char* view_id, int32_t visible);
 DC_API void    dc_view_set_focus(const char* view_id, int32_t focused);
 DC_API void    dc_view_close(const char* view_id);
+
+// ---- windowless input (OSR) ----
+// button: 0=left 1=middle 2=right ; type for mouse_button: 1=down 0=up
+DC_API void dc_view_osr_size(const char* view_id, int32_t width, int32_t height);
+DC_API void dc_view_mouse_move(const char* view_id, int32_t x, int32_t y, int32_t leaving);
+DC_API void dc_view_mouse_button(const char* view_id, int32_t x, int32_t y,
+                                 int32_t button, int32_t down, int32_t click_count);
+DC_API void dc_view_mouse_wheel(const char* view_id, int32_t x, int32_t y,
+                                int32_t delta_x, int32_t delta_y);
+DC_API void dc_view_key(const char* view_id, int32_t is_down, int32_t windows_key_code,
+                        int32_t native_key_code, uint32_t modifiers, uint16_t character);
 
 // ---- diagnostics ----
 DC_API const char* dc_version(void);   // "CEF x.y.z / Chromium a.b.c.d"
