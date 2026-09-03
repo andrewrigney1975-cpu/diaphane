@@ -12,3 +12,8 @@ TestResults/
 
 # M2 native bridge build output
 src/Diaphane.Core/native/build/
+
+src/Diaphane.App/bin/
+src/Diaphane.App/obj/
+**/bin/x64/
+**/obj/x64/

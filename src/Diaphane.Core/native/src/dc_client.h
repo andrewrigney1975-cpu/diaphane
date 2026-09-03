@@ -19,6 +19,7 @@ class DcClient : public CefClient,
   CefRefPtr<CefBrowser> browser() const { return browser_; }
   const std::string& view_id() const { return view_id_; }
   void set_size(int w, int h) { width_ = w; height_ = h; }
+  void set_pending_url(const std::string& u) { pending_url_ = u; }
 
   // CefClient
   CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override { return this; }
@@ -54,6 +55,7 @@ class DcClient : public CefClient,
   std::string view_id_;
   dc_view_callbacks cb_;
   CefRefPtr<CefBrowser> browser_;
+  std::string pending_url_;   // navigation requested before OnAfterCreated
   int width_;
   int height_;
 

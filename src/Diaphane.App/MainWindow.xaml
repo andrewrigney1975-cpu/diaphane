@@ -1,0 +1,77 @@
+<Window
+    x:Class="Diaphane.App.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:Microsoft.UI.Xaml.Controls"
+    xmlns:tabs="using:Diaphane.Shell.Tabs">
+
+    <Grid x:Name="Root" RowSpacing="0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- tab strip -->
+        <controls:TabView x:Name="TabStrip" Grid.Row="0"
+                          VerticalAlignment="Top" Height="40"
+                          TabItemsSource="{x:Bind Vm.Tabs, Mode=OneWay}"
+                          IsAddTabButtonVisible="True"
+                          AddTabButtonClick="OnAddTab"
+                          SelectionChanged="OnTabSelectionChanged"
+                          TabCloseRequested="OnTabClose"
+                          CanReorderTabs="True">
+            <controls:TabView.TabItemTemplate>
+                <DataTemplate x:DataType="tabs:TabModel">
+                    <TextBlock Text="{x:Bind Title, Mode=OneWay}" TextTrimming="CharacterEllipsis"
+                               MaxWidth="200" VerticalAlignment="Center" />
+                </DataTemplate>
+            </controls:TabView.TabItemTemplate>
+        </controls:TabView>
+
+        <!-- toolbar -->
+        <Grid Grid.Row="1" Height="44" Padding="8,4" ColumnSpacing="4"
+              Background="{ThemeResource LayerFillColorDefaultBrush}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <Button Grid.Column="0" Command="{x:Bind Vm.GoBackCommand}" ToolTipService.ToolTip="Back">
+                <FontIcon Glyph="&#xE72B;" FontSize="14" />
+            </Button>
+            <Button Grid.Column="1" Command="{x:Bind Vm.GoForwardCommand}" ToolTipService.ToolTip="Forward">
+                <FontIcon Glyph="&#xE72A;" FontSize="14" />
+            </Button>
+            <Button Grid.Column="2" Command="{x:Bind Vm.ReloadCommand}" ToolTipService.ToolTip="Reload">
+                <FontIcon Glyph="&#xE72C;" FontSize="14" />
+            </Button>
+
+            <AutoSuggestBox x:Name="Address" Grid.Column="3" VerticalAlignment="Center"
+                            PlaceholderText="Search or enter address"
+                            QueryIcon="Find"
+                            Text="{x:Bind Vm.AddressText, Mode=TwoWay}"
+                            TextChanged="OnAddressTextChanged"
+                            QuerySubmitted="OnAddressSubmitted"
+                            SuggestionChosen="OnSuggestionChosen" />
+
+            <Button Grid.Column="4" Command="{x:Bind Vm.ToggleBookmarkCommand}" ToolTipService.ToolTip="Bookmark">
+                <FontIcon Glyph="&#xE734;" FontSize="14" />
+            </Button>
+            <Button Grid.Column="5" Command="{x:Bind Vm.NewSandboxTabCommand}" ToolTipService.ToolTip="New Sandbox tab">
+                <FontIcon Glyph="&#xE727;" FontSize="14" />
+            </Button>
+        </Grid>
+
+        <!-- where the CEF child window lives -->
+        <Border x:Name="BrowserRegion" Grid.Row="2"
+                Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                SizeChanged="OnBrowserRegionChanged" />
+        <ProgressBar x:Name="LoadBar" Grid.Row="2" VerticalAlignment="Top" IsIndeterminate="True"
+                     Visibility="Collapsed" />
+    </Grid>
+</Window>

@@ -1,5 +1,9 @@
 #include "src/dc_client.h"
 
+#if defined(_WIN32)
+#include <windows.h>
+#endif
+
 #include "include/cef_browser.h"
 #include "include/cef_frame.h"
 
@@ -8,7 +12,13 @@ DcClient::DcClient(std::string view_id, dc_view_callbacks cb, int width, int hei
 
 void DcClient::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
   browser_ = browser;
+  // The interpose host window starts hidden (WS_CHILD without WS_VISIBLE); the
+  // shell reveals it via dc_view_set_bounds once the content rect is known.
   if (cb_.on_created) cb_.on_created(view_id_.c_str(), cb_.user);
+  if (!pending_url_.empty()) {
+    browser_->GetMainFrame()->LoadURL(CefString(pending_url_));
+    pending_url_.clear();
+  }
 }
 
 void DcClient::OnBeforeClose(CefRefPtr<CefBrowser> browser) {

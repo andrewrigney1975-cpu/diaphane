@@ -17,6 +17,7 @@ class DcApp : public CefApp,
     pump_cb_ = cb;
     pump_user_ = user;
   }
+  void SetUserDataDir(const CefString& dir) { user_data_dir_ = dir; }
   bool context_initialized() const { return context_initialized_; }
 
   // CefApp
@@ -32,6 +33,7 @@ class DcApp : public CefApp,
   dc_schedule_pump_cb pump_cb_ = nullptr;
   void* pump_user_ = nullptr;
   bool context_initialized_ = false;
+  CefString user_data_dir_;
 
   IMPLEMENT_REFCOUNTING(DcApp);
   DISALLOW_COPY_AND_ASSIGN(DcApp);

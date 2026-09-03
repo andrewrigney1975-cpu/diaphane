@@ -96,3 +96,31 @@ Key points:
 
 Bridge M2 stubs (later milestones): storage-clear (needs BrowsingDataRemover),
 extension loading, per-context proxy, windowed (non-OSR) HWND hosting.
+
+---
+
+# M3 — WinUI 3 shell: ⚠️ SCAFFOLD COMPLETE, CEF hosting blocked
+
+`src/Diaphane.App/` — unpackaged WinUI 3 (net8.0-windows10.0.19041, WindowsAppSDK 1.7).
+**Build with VS MSBuild** (`F:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\...`).
+
+**Works:** window + chrome, `TabView` strip, toolbar, `AutoSuggestBox` address bar with
+history/bookmark suggestions, `ShellViewModel` (CommunityToolkit.Mvvm) wiring `TabManager` +
+`OmniboxParser` + `HistoryStore`/`BookmarkStore` (SQLite) + `CefEngine`. CEF inits, spawns
+6 subprocesses, per-tab request contexts.
+
+**Critical fix found:** CEF's Chrome runtime with an empty `cache_path` **inherits the
+machine's real Chrome/Edge profile** — bookmarks, open session, everything. Fixed by pinning
+`cache_path == root_cache_path == %LOCALAPPDATA%\Diaphane\UserData`. (`diaphane_core.cc`.)
+
+**Blocked:** CEF page pixels never reach the window. `FATAL:ui\gl\child_window_win.cc:117
+NOTREACHED` in the GPU process — Chromium's **windowed** GPU compositor can't create its GL
+child window when the CEF browser HWND is `SetAsChild` under the WinUI content island (tried
+an interposing plain-Win32 child window too; same result). Process-wide GPU switches
+(`--disable-gpu`, `--in-process-gpu`, `--use-angle`) fix the crash but break WinUI 3's own
+compositor (shared process). This is the architecture-doc §04 airspace problem.
+
+**M3 completion = OSR path:** the M2 bridge already runs CEF windowless (headless test
+passes). Expose `OnPaint` BGRA through the C ABI → `WriteableBitmap` in a `SwapChainPanel`/
+`Image` → forward mouse/keyboard/IME/DPI to `CefBrowserHost::SendMouse*Event`. See
+`src/Diaphane.App/README.md`.

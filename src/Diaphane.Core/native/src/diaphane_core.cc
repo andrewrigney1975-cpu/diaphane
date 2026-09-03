@@ -33,7 +33,33 @@ std::atomic<uint64_t> g_next_id{1};
 
 std::unordered_map<std::string, CefRefPtr<CefRequestContext>> g_contexts;
 std::unordered_map<std::string, CefRefPtr<DcClient>> g_views;
+std::unordered_map<std::string, HWND> g_view_hosts;   // intermediate Win32 host per view
 std::string g_version_str;
+
+#if defined(_WIN32)
+// Chromium's windowed GPU compositor creates a GL child window of the browser
+// HWND and hits NOTREACHED (child_window_win.cc) if that HWND sits directly under
+// a foreign framework window (the WinUI content island). Interposing a plain
+// Win32 child window gives Chromium the "normal" parent it expects.
+const wchar_t* kHostClass = L"DiaphaneCefHost";
+
+HWND CreateInterposeWindow(HWND parent, int w, int h) {
+  static bool registered = false;
+  if (!registered) {
+    WNDCLASSEXW wc = {sizeof(wc)};
+    wc.lpfnWndProc = ::DefWindowProcW;
+    wc.hInstance = ::GetModuleHandleW(nullptr);
+    wc.hCursor = ::LoadCursor(nullptr, IDC_ARROW);
+    wc.lpszClassName = kHostClass;
+    ::RegisterClassExW(&wc);
+    registered = true;
+  }
+  return ::CreateWindowExW(
+      0, kHostClass, L"", WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+      0, 0, w > 0 ? w : 1280, h > 0 ? h : 800,
+      parent, nullptr, ::GetModuleHandleW(nullptr), nullptr);
+}
+#endif
 
 std::string NewId(const char* prefix) {
   return std::string(prefix) + std::to_string(g_next_id.fetch_add(1));
@@ -72,6 +98,8 @@ int32_t dc_initialize(const dc_settings* s,
 
   g_app = new DcApp();
   g_app->SetPumpCallback(pump_cb, pump_user);
+  if (s->root_cache_dir && *s->root_cache_dir)
+    g_app->SetUserDataDir(CefString(s->root_cache_dir));
 
   // Even in the browser process CEF wants this called first (early init). It
   // returns >= 0 only when this process is actually a sub-process, which it
@@ -85,7 +113,13 @@ int32_t dc_initialize(const dc_settings* s,
   settings.external_message_pump = 1;
   settings.windowless_rendering_enabled = s->windowless ? 1 : 0;
   settings.log_severity = LOGSEVERITY_INFO;
+  settings.persist_session_cookies = 0;   // don't keep session cookies across runs
   if (s->root_cache_dir && *s->root_cache_dir) {
+    // Both must be set and equal — otherwise the Chrome runtime falls back to a
+    // platform-default (or an existing Chrome/Edge) user-data dir and inherits
+    // its bookmarks / session. This is a privacy-first browser: never do that.
+    CefString(&settings.root_cache_path) = s->root_cache_dir;
+    CefString(&settings.cache_path) = s->root_cache_dir;
     std::string log = std::string(s->root_cache_dir) + "\\diaphane_cef.log";
     CefString(&settings.log_file) = log;
   }
@@ -207,23 +241,33 @@ const char* dc_view_create(const char* ctx_id, void* host_hwnd,
   if (g_windowless) {
     window_info.SetAsWindowless(reinterpret_cast<HWND>(host_hwnd));
   } else {
+    HWND interpose = CreateInterposeWindow(reinterpret_cast<HWND>(host_hwnd), width, height);
+    g_view_hosts[id] = interpose;
     CefRect rect(0, 0, width > 0 ? width : 1280, height > 0 ? height : 800);
-    window_info.SetAsChild(reinterpret_cast<HWND>(host_hwnd), rect);
+    window_info.SetAsChild(interpose, rect);
   }
 #endif
 
   CefBrowserSettings bs;
-  CefRefPtr<CefBrowser> browser = CefBrowserHost::CreateBrowserSync(
-      window_info, client, CefString("about:blank"), bs, nullptr, ctx);
-  if (!browser) return nullptr;
+  // Async create: CreateBrowserSync would block this (the message-loop) thread
+  // while the render-process handshake needs that same loop pumped, so the
+  // browser-info IPC times out and the frame never renders. OnAfterCreated
+  // flushes any navigation requested in the meantime.
+  if (!CefBrowserHost::CreateBrowser(window_info, client, CefString("about:blank"),
+                                     bs, nullptr, ctx))
+    return nullptr;
 
   auto res = g_views.emplace(std::move(id), client);
   return res.first->first.c_str();
 }
 
 void dc_view_navigate(const char* view_id, const char* url) {
-  auto b = LookupBrowser(view_id);
-  if (b && url) b->GetMainFrame()->LoadURL(CefString(url));
+  auto c = LookupView(view_id);
+  if (!c || !url) return;
+  if (auto b = c->browser())
+    b->GetMainFrame()->LoadURL(CefString(url));
+  else
+    c->set_pending_url(url);   // browser still being created; flushed in OnAfterCreated
 }
 void dc_view_reload(const char* view_id, int32_t ignore_cache) {
   auto b = LookupBrowser(view_id);
@@ -253,26 +297,34 @@ void dc_view_set_bounds(const char* view_id, int32_t x, int32_t y,
   if (!c) return;
   c->set_size(w, h);
   auto b = c->browser();
-  if (!b) return;
 #if defined(_WIN32)
   if (!g_windowless) {
-    HWND hwnd = b->GetHost()->GetWindowHandle();
-    if (hwnd) ::SetWindowPos(hwnd, nullptr, x, y, w, h,
-                             SWP_NOZORDER | SWP_NOACTIVATE);
+    auto hit = g_view_hosts.find(view_id);
+    if (hit != g_view_hosts.end() && hit->second) {
+      // Move/size the interpose window; CEF fills it and reflows on WM_SIZE.
+      ::SetWindowPos(hit->second, HWND_TOP, x, y, w > 0 ? w : 1,
+                     h > 0 ? h : 1, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+      if (b) {
+        if (HWND cef = b->GetHost()->GetWindowHandle())
+          ::SetWindowPos(cef, nullptr, 0, 0, w > 0 ? w : 1, h > 0 ? h : 1,
+                         SWP_NOZORDER | SWP_NOACTIVATE);
+      }
+    }
+    return;  // Chrome-runtime windowed browsers resize via the native window.
   }
 #endif
-  b->GetHost()->WasResized();
+  if (b) b->GetHost()->WasResized();
 }
 void dc_view_set_visible(const char* view_id, int32_t visible) {
-  auto b = LookupBrowser(view_id);
-  if (!b) return;
 #if defined(_WIN32)
   if (!g_windowless) {
-    HWND hwnd = b->GetHost()->GetWindowHandle();
-    if (hwnd) ::ShowWindow(hwnd, visible ? SW_SHOW : SW_HIDE);
+    auto hit = g_view_hosts.find(view_id);
+    if (hit != g_view_hosts.end() && hit->second)
+      ::ShowWindow(hit->second, visible ? SW_SHOW : SW_HIDE);
+    return;  // WasHidden() is windowless-only under the Chrome runtime.
   }
 #endif
-  b->GetHost()->WasHidden(!visible);
+  if (auto b = LookupBrowser(view_id)) b->GetHost()->WasHidden(!visible);
 }
 void dc_view_set_focus(const char* view_id, int32_t focused) {
   if (auto b = LookupBrowser(view_id)) b->GetHost()->SetFocus(focused != 0);
@@ -281,6 +333,13 @@ void dc_view_close(const char* view_id) {
   auto c = LookupView(view_id);
   if (!c) return;
   if (auto b = c->browser()) b->GetHost()->CloseBrowser(true);
+#if defined(_WIN32)
+  auto hit = g_view_hosts.find(view_id);
+  if (hit != g_view_hosts.end()) {
+    if (hit->second) ::DestroyWindow(hit->second);
+    g_view_hosts.erase(hit);
+  }
+#endif
   g_views.erase(view_id);
 }
 

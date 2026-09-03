@@ -24,11 +24,18 @@ void DcApp::OnBeforeCommandLineProcessing(const CefString& process_type,
 
     command_line->AppendSwitch("no-pings");
     command_line->AppendSwitch("no-default-browser-check");
+    command_line->AppendSwitch("no-first-run");
     command_line->AppendSwitch("disable-domain-reliability");
     command_line->AppendSwitch("disable-background-networking");
     command_line->AppendSwitch("disable-breakpad");
     command_line->AppendSwitch("disable-crash-reporter");
     command_line->AppendSwitch("disable-component-update");
+    command_line->AppendSwitch("disable-session-crashed-bubble");
+    command_line->AppendSwitch("hide-crash-restore-bubble");
+    // NOTE: process-wide GPU switches (--disable-gpu / --in-process-gpu /
+    // --use-angle) break WinUI 3's own compositor since it shares this process.
+    // The GPU-process instability seen when hosting via a raw child HWND is one
+    // reason the ContentIsland / OSR path is the right host for the shell.
   }
 }
 

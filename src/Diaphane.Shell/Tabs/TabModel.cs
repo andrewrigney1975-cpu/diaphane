@@ -43,6 +43,7 @@ public sealed class TabModel : INotifyPropertyChanged
     public void Reload() => _view.Reload();
     public void Back() => _view.GoBack();
     public void Forward() => _view.GoForward();
+    public void SetBounds(int x, int y, int width, int height) => _view.SetBounds(x, y, width, height);
     internal IBrowserView View => _view;
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -73,6 +74,15 @@ public sealed class TabManager : IDisposable
 
     public ObservableCollection<TabModel> Tabs { get; } = new();
     public TabModel? Active { get; private set; }
+
+    private (int X, int Y, int W, int H)? _lastBounds;
+
+    /// <summary>Remember the content-area rect so a freshly activated tab is sized to match.</summary>
+    public void SetActiveBounds(int x, int y, int w, int h)
+    {
+        _lastBounds = (x, y, w, h);
+        Active?.SetBounds(x, y, w, h);
+    }
 
     public TabModel NewStandardTab(string? url = null)
     {
@@ -122,6 +132,8 @@ public sealed class TabManager : IDisposable
     {
         foreach (var t in Tabs) t.View.SetVisible(ReferenceEquals(t, tab));
         Active = tab;
+        if (tab is not null && _lastBounds is { } b)
+            tab.SetBounds(b.X, b.Y, b.W, b.H);
         tab?.View.SetFocus(true);
     }
 
