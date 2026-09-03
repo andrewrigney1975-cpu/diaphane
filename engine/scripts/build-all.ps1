@@ -62,7 +62,7 @@ $denyRe = 'add-flag|add-flags-for|add-ungoogled-flag-headers|add-components-ungo
           'add-credits|add-extra-channel-info|add-suggestions-url-field|first-run-page|' +
           'keep-expired-flags|remove-uneeded-ui|enable-menu-on-reload-button|' +
           'enable-paste-and-go-new-tab-button|restore-classic-ntp|disable-formatting-in-omnibox|' +
-          'remove-unused-preferences-fields|disable-rlz'
+          'remove-unused-preferences-fields|fix-building-without-safebrowsing|disable-rlz'
 $applied=0; $skipped=@()
 Get-Content "$ung\patches\series" | Where-Object { $_ -and -not $_.StartsWith('#') } | ForEach-Object {
     $p = $_
@@ -87,7 +87,11 @@ Write-Host "=== 5b. diaphane build fixes (SDK 26100, ungoogled<->CEF, grd stalen
 Write-Host "=== 6. merge ungoogled flags.gn + re-gn-gen ==="
 if (-not (Test-Path "$out\args.gn")) { Write-Host "BUILD_ALL_DONE no_args_gn (gclient_hook failed at step 3)"; exit 1 }
 Add-Content "$out\args.gn" "`n# ---- ungoogled-chromium flags.gn ----"
-Add-Content "$out\args.gn" (Get-Content "$ung\flags.gn")
+# safe_browsing_mode=0 needs fix-building-without-safebrowsing.patch fully rebased
+# onto Cr151 (123 hunks, doesn't apply clean under CEF-first) or the build fails on
+# SBER_LEVEL_* / webstore refs. M1: let safe_browsing compile at CEF's default mode;
+# it's disabled by the default-prefs patch and de-phoned by the iridium patches.
+Add-Content "$out\args.gn" ((Get-Content "$ung\flags.gn") | Where-Object { $_ -notmatch 'safe_browsing_mode' })
 Copy-Item "$out\args.gn" "$root\final-args.gn" -Force
 & gn gen $out *> "$root\ba-gngen.log"
 Write-Host "gn gen exit=$LASTEXITCODE"
@@ -95,7 +99,7 @@ Get-Content "$root\ba-gngen.log" -Tail 20
 if ($LASTEXITCODE -ne 0) { Write-Host "BUILD_ALL_DONE gn_gen_failed"; exit 1 }
 
 Write-Host "=== 7. autoninja cef ==="
-& autoninja -C $out cef *> "$root\ba-ninja.log"
+& autoninja -C $out cefsimple libcef libcef_dll_wrapper *> "$root\ba-ninja.log"
 $ne = $LASTEXITCODE
 Get-Content "$root\ba-ninja.log" -Tail 25
 Write-Host "BUILD_ALL_DONE ninja_exit=$ne out=$out"

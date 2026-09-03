@@ -27,7 +27,7 @@ if ($LASTEXITCODE -ne 0) { Write-Host "GNBUILD_DONE gn_gen_failed"; exit 1 }
 
 Write-Host "=== autoninja -C $out cef  (the compile) ==="
 $t0 = Get-Date
-& autoninja -C $out cef *> "$root\gb-ninja.log"
+& autoninja -C $out cefsimple libcef libcef_dll_wrapper *> "$root\gb-ninja.log"
 $ne = $LASTEXITCODE
 Write-Host ("elapsed: {0:hh\:mm\:ss}" -f ((Get-Date)-$t0))
 Get-Content "$root\gb-ninja.log" -Tail 30
