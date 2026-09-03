@@ -79,6 +79,7 @@ public interface IOffscreenBrowserView : IBrowserView
     event EventHandler<FramePaint>? FramePainted;
 
     void ResizeSurface(int width, int height);
+    void Invalidate();
     void SendMouseMove(int x, int y, bool leaving);
     void SendMouseButton(int x, int y, int button, bool down, int clickCount);
     void SendMouseWheel(int x, int y, int deltaX, int deltaY);

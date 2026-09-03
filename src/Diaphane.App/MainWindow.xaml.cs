@@ -7,8 +7,12 @@ using Diaphane.Shell.Tabs;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Foundation;
+using Windows.System;
+using Windows.UI;
+using Colors = Microsoft.UI.Colors;
 
 namespace Diaphane.App;
 
@@ -35,6 +39,7 @@ public sealed partial class MainWindow : Window
         _cef = new CefHost(DispatcherQueue, CefHost.ResolveNativeBinDir());
         Vm = new ShellViewModel(_cef.Engine, dataDir);
         Vm.PropertyChanged += OnVmPropertyChanged;
+        Vm.Tabs.CollectionChanged += (_, _) => SyncTabStrip();
 
         Root.Loaded += (_, _) =>
         {
@@ -42,7 +47,7 @@ public sealed partial class MainWindow : Window
             {
                 _scale = Root.XamlRoot?.RasterizationScale ?? 1.0;
                 Vm.Start(0);
-                SelectActiveInStrip();
+                SyncTabStrip();
                 AttachActiveView();
             }
             catch (Exception ex)
@@ -55,6 +60,47 @@ public sealed partial class MainWindow : Window
                 _ = SelfCaptureLoopAsync();
         };
         Closed += (_, _) => { Vm.Dispose(); _cef.Dispose(); };
+
+        InstallAccelerators();
+    }
+
+    // ---- x:Bind function helpers (sandbox accent) ----
+    private static readonly SolidColorBrush s_sandboxText = new(Color.FromArgb(0xFF, 0xB3, 0x9D, 0xDB));
+
+    public static Brush TabBrush(bool isSandbox) => isSandbox
+        ? s_sandboxText
+        : (Application.Current.Resources["TextFillColorPrimaryBrush"] as Brush ?? new SolidColorBrush(Colors.White));
+
+    public static Visibility VisIf(bool b) => b ? Visibility.Visible : Visibility.Collapsed;
+
+    public static Brush ToolbarBrush(bool isSandbox) => isSandbox
+        ? new SolidColorBrush(Color.FromArgb(0x33, 0x67, 0x3A, 0xB7))
+        : (Application.Current.Resources["LayerFillColorDefaultBrush"] as Brush ?? new SolidColorBrush(Colors.Transparent));
+
+    // ---- keyboard accelerators ----
+    private void InstallAccelerators()
+    {
+        void Add(VirtualKey key, VirtualKeyModifiers mods, Action run)
+        {
+            var a = new KeyboardAccelerator { Key = key, Modifiers = mods };
+            a.Invoked += (_, e) => { e.Handled = true; run(); };
+            Root.KeyboardAccelerators.Add(a);
+        }
+
+        const VirtualKeyModifiers Ctrl = VirtualKeyModifiers.Control;
+        const VirtualKeyModifiers CtrlShift = VirtualKeyModifiers.Control | VirtualKeyModifiers.Shift;
+
+        Add(VirtualKey.T, Ctrl, () => Vm.NewTab());
+        Add(VirtualKey.W, Ctrl, () => Vm.CloseActiveTab());
+        Add(VirtualKey.Tab, Ctrl, () => Vm.NextTab());
+        Add(VirtualKey.Tab, CtrlShift, () => Vm.PrevTab());
+        Add(VirtualKey.L, Ctrl, () => Address.Focus(FocusState.Programmatic));
+        Add(VirtualKey.F5, VirtualKeyModifiers.None, () => Vm.ReloadCommand.Execute(null));
+        Add(VirtualKey.Left, VirtualKeyModifiers.Menu, () => Vm.GoBackCommand.Execute(null));
+        Add(VirtualKey.Right, VirtualKeyModifiers.Menu, () => Vm.GoForwardCommand.Execute(null));
+        Add(VirtualKey.D, Ctrl, () => Vm.ToggleBookmarkCommand.Execute(null));
+        Add(VirtualKey.B, CtrlShift, () => Vm.ToggleBookmarksBarCommand.Execute(null));
+        Add(VirtualKey.N, CtrlShift, () => Vm.NewSandboxTabCommand.Execute(null));
     }
 
     // Diagnostic: RenderTargetBitmap captures the live XAML visual tree (incl. the
@@ -84,7 +130,8 @@ public sealed partial class MainWindow : Window
                     (uint)rtb.PixelWidth, (uint)rtb.PixelHeight, 96, 96, px);
                 await enc.FlushAsync();
                 File.AppendAllText(Path.Combine(Path.GetTempPath(), "diaphane-app.log"),
-                    $"{DateTime.Now:o} selfshot {i}: {rtb.PixelWidth}x{rtb.PixelHeight} nonBlackPx={nonBlack}\n");
+                    $"{DateTime.Now:o} selfshot {i}: {rtb.PixelWidth}x{rtb.PixelHeight} nonBlackPx={nonBlack} " +
+                    $"tab='{Vm.ActiveTab?.Title}' url='{Vm.ActiveTab?.Url}'\n");
             }
             catch (Exception ex)
             {
@@ -119,7 +166,31 @@ public sealed partial class MainWindow : Window
         {
             _view.FramePainted += OnFramePainted;
             ResizeSurface();
+            _view.Invalidate();   // force a full repaint of the newly-shown tab's surface
         }
+    }
+
+    // ---- history flyout ----
+    private void OnHistoryFlyoutOpening(object? sender, object e)
+        => HistoryList.ItemsSource = Vm.RecentHistory();
+
+    private void OnHistoryItemClick(object sender, ItemClickEventArgs e)
+    {
+        if (e.ClickedItem is Diaphane.Data.VisitEntry v)
+            Vm.NavigateCommand.Execute(v.Url);
+    }
+
+    // ---- bookmarks bar ----
+    private void OnBookmarkClick(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is Diaphane.Data.Bookmark b)
+            Vm.OpenBookmarkCommand.Execute(b);
+    }
+
+    private void OnBookmarkRemove(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is Diaphane.Data.Bookmark b)
+            Vm.RemoveBookmarkCommand.Execute(b);
     }
 
     private void OnBrowserRegionChanged(object sender, SizeChangedEventArgs e) => ResizeSurface();
@@ -226,20 +297,92 @@ public sealed partial class MainWindow : Window
         => _view?.SendKey(true, 0, 0, 0, e.Character);
 
     // ---- tab strip ----
+    // We build TabViewItems by hand (rather than TabItemsSource + TabItemTemplate)
+    // because TabView does not refresh a templated header when the bound model's
+    // properties change — the tab title would stay frozen at "New Tab".
+    private readonly Dictionary<TabModel, TabViewItem> _tabItems = new();
+    private bool _syncingStrip;
+
+    private void SyncTabStrip()
+    {
+        // add missing
+        foreach (var t in Vm.Tabs)
+            if (!_tabItems.ContainsKey(t))
+            {
+                var item = BuildTabItem(t);
+                _tabItems[t] = item;
+                t.PropertyChanged += OnTabModelPropertyChanged;
+            }
+
+        // remove stale
+        foreach (var kv in _tabItems.Where(kv => !Vm.Tabs.Contains(kv.Key)).ToList())
+        {
+            kv.Key.PropertyChanged -= OnTabModelPropertyChanged;
+            _tabItems.Remove(kv.Key);
+        }
+
+        _syncingStrip = true;
+        TabStrip.TabItems.Clear();
+        foreach (var t in Vm.Tabs) TabStrip.TabItems.Add(_tabItems[t]);
+        _syncingStrip = false;
+
+        SelectActiveInStrip();
+    }
+
+    private static TabViewItem BuildTabItem(TabModel t)
+    {
+        var icon = new FontIcon
+        {
+            Glyph = "",
+            FontSize = 12,
+            Foreground = s_sandboxText,
+            Visibility = t.IsSandbox ? Visibility.Visible : Visibility.Collapsed,
+            Margin = new Thickness(0, 0, 6, 0),
+        };
+        var text = new TextBlock
+        {
+            Text = t.Title,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            MaxWidth = 200,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        var panel = new StackPanel { Orientation = Orientation.Horizontal };
+        panel.Children.Add(icon);
+        panel.Children.Add(text);
+        return new TabViewItem { Header = panel, Tag = t };
+    }
+
+    private void OnTabModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (sender is not TabModel t || e.PropertyName != nameof(TabModel.Title)) return;
+        if (_tabItems.TryGetValue(t, out var item) &&
+            item.Header is StackPanel { Children: [_, TextBlock tb] })
+            tb.Text = t.Title;
+    }
+
     private void OnAddTab(TabView sender, object args) => Vm.NewTab();
+
     private void OnTabClose(TabView sender, TabViewTabCloseRequestedEventArgs args)
     {
-        if (args.Item is TabModel t) Vm.CloseTab(t);
+        if (args.Tab?.Tag is TabModel t) Vm.CloseTab(t);
     }
+
     private void OnTabSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (TabStrip.SelectedItem is TabModel t && !ReferenceEquals(t, Vm.ActiveTab))
+        if (_syncingStrip) return;
+        if (TabStrip.SelectedItem is TabViewItem { Tag: TabModel t } && !ReferenceEquals(t, Vm.ActiveTab))
             Vm.ActiveTab = t;
     }
+
     private void SelectActiveInStrip()
     {
-        if (!ReferenceEquals(TabStrip.SelectedItem, Vm.ActiveTab))
-            TabStrip.SelectedItem = Vm.ActiveTab;
+        if (Vm.ActiveTab is { } a && _tabItems.TryGetValue(a, out var item)
+            && !ReferenceEquals(TabStrip.SelectedItem, item))
+        {
+            _syncingStrip = true;
+            TabStrip.SelectedItem = item;
+            _syncingStrip = false;
+        }
     }
 
     // ---- address bar ----

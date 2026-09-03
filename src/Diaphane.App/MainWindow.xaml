@@ -3,10 +3,16 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:controls="using:Microsoft.UI.Xaml.Controls"
-    xmlns:tabs="using:Diaphane.Shell.Tabs">
+    xmlns:local="using:Diaphane.App"
+    xmlns:tabs="using:Diaphane.Shell.Tabs"
+    xmlns:data="using:Diaphane.Data">
 
     <Grid x:Name="Root" RowSpacing="0">
+        <Grid.Resources>
+            <local:BoolToVisibilityConverter x:Key="BoolVis" />
+        </Grid.Resources>
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -15,23 +21,15 @@
         <!-- tab strip -->
         <controls:TabView x:Name="TabStrip" Grid.Row="0"
                           VerticalAlignment="Top" Height="40"
-                          TabItemsSource="{x:Bind Vm.Tabs, Mode=OneWay}"
                           IsAddTabButtonVisible="True"
                           AddTabButtonClick="OnAddTab"
                           SelectionChanged="OnTabSelectionChanged"
                           TabCloseRequested="OnTabClose"
-                          CanReorderTabs="True">
-            <controls:TabView.TabItemTemplate>
-                <DataTemplate>
-                    <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis"
-                               MaxWidth="220" VerticalAlignment="Center" />
-                </DataTemplate>
-            </controls:TabView.TabItemTemplate>
-        </controls:TabView>
+                          CanReorderTabs="False" />
 
         <!-- toolbar -->
         <Grid Grid.Row="1" Height="44" Padding="8,4" ColumnSpacing="4"
-              Background="{ThemeResource LayerFillColorDefaultBrush}">
+              Background="{x:Bind local:MainWindow.ToolbarBrush(Vm.ActiveIsSandbox), Mode=OneWay}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
@@ -39,15 +37,17 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <Button Grid.Column="0" Command="{x:Bind Vm.GoBackCommand}" ToolTipService.ToolTip="Back">
+            <Button Grid.Column="0" Command="{x:Bind Vm.GoBackCommand}" ToolTipService.ToolTip="Back (Alt+Left)">
                 <FontIcon Glyph="&#xE72B;" FontSize="14" />
             </Button>
-            <Button Grid.Column="1" Command="{x:Bind Vm.GoForwardCommand}" ToolTipService.ToolTip="Forward">
+            <Button Grid.Column="1" Command="{x:Bind Vm.GoForwardCommand}" ToolTipService.ToolTip="Forward (Alt+Right)">
                 <FontIcon Glyph="&#xE72A;" FontSize="14" />
             </Button>
-            <Button Grid.Column="2" Command="{x:Bind Vm.ReloadCommand}" ToolTipService.ToolTip="Reload">
+            <Button Grid.Column="2" Command="{x:Bind Vm.ReloadCommand}" ToolTipService.ToolTip="Reload (F5)">
                 <FontIcon Glyph="&#xE72C;" FontSize="14" />
             </Button>
 
@@ -59,16 +59,73 @@
                             QuerySubmitted="OnAddressSubmitted"
                             SuggestionChosen="OnSuggestionChosen" />
 
-            <Button Grid.Column="4" Command="{x:Bind Vm.ToggleBookmarkCommand}" ToolTipService.ToolTip="Bookmark">
+            <Button Grid.Column="4" Command="{x:Bind Vm.ToggleBookmarkCommand}" ToolTipService.ToolTip="Bookmark (Ctrl+D)">
                 <FontIcon Glyph="&#xE734;" FontSize="14" />
             </Button>
-            <Button Grid.Column="5" Command="{x:Bind Vm.NewSandboxTabCommand}" ToolTipService.ToolTip="New Sandbox tab">
-                <FontIcon Glyph="&#xE727;" FontSize="14" />
+            <Button Grid.Column="5" ToolTipService.ToolTip="History (Ctrl+H)">
+                <FontIcon Glyph="&#xE81C;" FontSize="14" />
+                <Button.Flyout>
+                    <Flyout Opening="OnHistoryFlyoutOpening">
+                        <StackPanel Width="420" Spacing="6">
+                            <Grid>
+                                <TextBlock Text="History" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                <HyperlinkButton Content="Clear all" HorizontalAlignment="Right"
+                                                 Command="{x:Bind Vm.ClearHistoryCommand}" />
+                            </Grid>
+                            <ListView x:Name="HistoryList" MaxHeight="380" SelectionMode="None"
+                                      IsItemClickEnabled="True" ItemClick="OnHistoryItemClick">
+                                <ListView.ItemTemplate>
+                                    <DataTemplate x:DataType="data:VisitEntry">
+                                        <StackPanel>
+                                            <TextBlock Text="{x:Bind Title}" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Text="{x:Bind Url}" FontSize="11" Opacity="0.6"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                        </StackPanel>
+                    </Flyout>
+                </Button.Flyout>
+            </Button>
+            <Button Grid.Column="6" Command="{x:Bind Vm.NewSandboxTabCommand}" ToolTipService.ToolTip="New Sandbox tab (Ctrl+Shift+N)">
+                <FontIcon Glyph="&#xE727;" FontSize="14" Foreground="#B39DDB" />
+            </Button>
+            <Button Grid.Column="7" Command="{x:Bind Vm.ToggleBookmarksBarCommand}" ToolTipService.ToolTip="Bookmarks bar (Ctrl+Shift+B)">
+                <FontIcon Glyph="&#xE8A4;" FontSize="14" />
             </Button>
         </Grid>
 
+        <!-- bookmarks bar -->
+        <Border Grid.Row="2" Height="32" Padding="6,0"
+                Background="{ThemeResource LayerFillColorAltBrush}"
+                Visibility="{x:Bind local:MainWindow.VisIf(Vm.ShowBookmarksBar), Mode=OneWay}">
+            <ScrollViewer HorizontalScrollMode="Auto" VerticalScrollMode="Disabled"
+                          HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled">
+                <ItemsControl ItemsSource="{x:Bind Vm.BookmarksBar, Mode=OneWay}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="2" /></ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="data:Bookmark">
+                            <Button Padding="8,2" Background="Transparent" BorderThickness="0"
+                                    Click="OnBookmarkClick" Tag="{x:Bind}">
+                                <TextBlock Text="{x:Bind Title}" FontSize="12" MaxWidth="160"
+                                           TextTrimming="CharacterEllipsis" />
+                                <Button.ContextFlyout>
+                                    <MenuFlyout>
+                                        <MenuFlyoutItem Text="Remove" Click="OnBookmarkRemove" Tag="{x:Bind}" />
+                                    </MenuFlyout>
+                                </Button.ContextFlyout>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Border>
+
         <!-- CEF off-screen surface -->
-        <Grid x:Name="BrowserRegion" Grid.Row="2"
+        <Grid x:Name="BrowserRegion" Grid.Row="3"
               Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
               SizeChanged="OnBrowserRegionChanged">
             <Image x:Name="BrowserImage" Stretch="None"
@@ -79,7 +136,7 @@
                    PointerWheelChanged="OnPointerWheel"
                    KeyDown="OnKeyDown" KeyUp="OnKeyUp" CharacterReceived="OnChar" />
         </Grid>
-        <ProgressBar x:Name="LoadBar" Grid.Row="2" VerticalAlignment="Top" IsIndeterminate="True"
+        <ProgressBar x:Name="LoadBar" Grid.Row="3" VerticalAlignment="Top" IsIndeterminate="True"
                      Visibility="Collapsed" />
     </Grid>
 </Window>

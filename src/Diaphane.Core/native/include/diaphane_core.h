@@ -106,6 +106,8 @@ DC_API void dc_view_mouse_wheel(const char* view_id, int32_t x, int32_t y,
                                 int32_t delta_x, int32_t delta_y);
 DC_API void dc_view_key(const char* view_id, int32_t is_down, int32_t windows_key_code,
                         int32_t native_key_code, uint32_t modifiers, uint16_t character);
+// Force a full repaint (OSR) — call when a hidden tab becomes visible again.
+DC_API void dc_view_invalidate(const char* view_id);
 
 // ---- diagnostics ----
 DC_API const char* dc_version(void);   // "CEF x.y.z / Chromium a.b.c.d"

@@ -73,6 +73,23 @@ public sealed class HistoryStore : IDisposable
         return list;
     }
 
+    /// <summary>Most-recent distinct-URL visits, newest first.</summary>
+    public IReadOnlyList<VisitEntry> Recent(int limit = 200)
+    {
+        using var cmd = _db.CreateCommand();
+        cmd.CommandText = """
+            SELECT url, MAX(title) AS title, MAX(visited_at) AS ts
+            FROM visits GROUP BY url ORDER BY ts DESC LIMIT $lim;
+        """;
+        cmd.Parameters.AddWithValue("$lim", limit);
+        var list = new List<VisitEntry>();
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+            list.Add(new VisitEntry(r.GetString(0), r.GetString(1),
+                DateTimeOffset.FromUnixTimeSeconds(r.GetInt64(2))));
+        return list;
+    }
+
     public void Clear(DateTimeOffset? since = null)
     {
         using var cmd = _db.CreateCommand();

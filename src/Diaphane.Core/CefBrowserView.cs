@@ -90,6 +90,7 @@ internal sealed class CefBrowserView : IOffscreenBrowserView
     public void SetFocus(bool focused) => dc_view_set_focus(NativeId, focused ? 1 : 0);
 
     public void ResizeSurface(int width, int height) => dc_view_osr_size(NativeId, width, height);
+    public void Invalidate() => dc_view_invalidate(NativeId);
     public void SendMouseMove(int x, int y, bool leaving) => dc_view_mouse_move(NativeId, x, y, leaving ? 1 : 0);
     public void SendMouseButton(int x, int y, int button, bool down, int clickCount) =>
         dc_view_mouse_button(NativeId, x, y, button, down ? 1 : 0, clickCount);

@@ -165,3 +165,34 @@ Diagnostic: set `DIAPHANE_SELFSHOT=1` → the app dumps `RenderTargetBitmap` fra
 ## M3 polish backlog
 - tab header, favicon in tab, CEF sandbox (currently no_sandbox), IME, per-monitor DPI on the OSR surface
 - `--disable-gpu-compositing` scoped test (OSR still spins a GPU process that logs child_window NOTREACHED but recovers)
+
+---
+
+# M4 / M5 / M6 — ✅ tabs, bookmarks+history+omnibox, sandbox tabs
+
+**M4 — Tabs.** Multi-tab strip built by hand (`TabView.TabItems` + code-behind sync in
+`MainWindow.xaml.cs`) rather than `TabItemsSource`+`TabItemTemplate`: TabView does **not**
+refresh a templated header when the bound model changes, so the title froze at "New Tab".
+Hand-built `TabViewItem`s subscribe to `TabModel.PropertyChanged` and update the header
+`TextBlock` directly — verified: tab now reads "DuckDuckGo - Protection. Privacy…".
+Switching the active tab calls `IOffscreenBrowserView.Invalidate()` after `ResizeSurface()`
+so the newly-shown surface repaints immediately. New C ABI: `dc_view_invalidate` →
+`CefBrowserHost::Invalidate(PET_VIEW)`, plus invalidate-on-show in `dc_view_set_visible`.
+Keyboard accelerators on `Root`: Ctrl+T/W, Ctrl+Tab / Ctrl+Shift+Tab, Ctrl+L, F5,
+Alt+Left/Right, Ctrl+D, Ctrl+Shift+B, Ctrl+Shift+N.
+
+**M5 — Bookmarks + history + omnibox.** `HistoryStore.Recent(limit)` for the history
+flyout (ListView, "Clear all"). Bookmarks bar (`ItemsControl`, toggle with Ctrl+Shift+B,
+per-item Remove flyout). `ShellViewModel.MaybeRecordVisit` records one visit per settled
+URL, **skipping sandbox tabs and about:/data:/chrome://diaphane:// schemes**, deduped via
+`_lastRecorded`. Omnibox suggestions merge bookmark+history (frecency), dedup by URL, top 8.
+
+**M6 — Sandbox tabs.** One ephemeral in-memory `CefRequestContext` per window shared by
+all sandbox tabs (`_sandboxGroup` guid); destroyed — RAM released, nothing persisted —
+when the last sandbox tab closes (`TabManager`). Sandbox tabs never touch `HistoryStore`.
+Visual: violet shield glyph in the tab, violet toolbar tint when a sandbox tab is active
+(`MainWindow.ToolbarBrush`). Covered by `SandboxTabTests` (own context / shared group /
+context disposed on last close).
+
+Tests: 13/13 `Diaphane.Shell.Tests` green. App builds with VS 18 MSBuild, runs, renders
+DuckDuckGo with the full M4/M5/M6 chrome (`%TEMP%\diaphane-shot*.png`).

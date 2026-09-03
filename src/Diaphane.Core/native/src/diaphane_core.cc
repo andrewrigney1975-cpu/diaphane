@@ -324,7 +324,10 @@ void dc_view_set_visible(const char* view_id, int32_t visible) {
     return;  // WasHidden() is windowless-only under the Chrome runtime.
   }
 #endif
-  if (auto b = LookupBrowser(view_id)) b->GetHost()->WasHidden(!visible);
+  if (auto b = LookupBrowser(view_id)) {
+    b->GetHost()->WasHidden(!visible);
+    if (visible) b->GetHost()->Invalidate(PET_VIEW);   // repaint the tab we just switched to
+  }
 }
 void dc_view_set_focus(const char* view_id, int32_t focused) {
   if (auto b = LookupBrowser(view_id)) b->GetHost()->SetFocus(focused != 0);
@@ -397,6 +400,11 @@ void dc_view_key(const char* view_id, int32_t is_down, int32_t windows_key_code,
   }
   ke.type = is_down ? KEYEVENT_RAWKEYDOWN : KEYEVENT_KEYUP;
   b->GetHost()->SendKeyEvent(ke);
+}
+
+void dc_view_invalidate(const char* view_id) {
+  if (auto b = LookupBrowser(view_id))
+    b->GetHost()->Invalidate(PET_VIEW);
 }
 
 const char* dc_version(void) {

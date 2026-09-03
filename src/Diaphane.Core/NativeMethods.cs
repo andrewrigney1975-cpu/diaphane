@@ -130,6 +130,8 @@ internal static partial class NativeMethods
     internal static partial void dc_view_mouse_wheel(string viewId, int x, int y, int deltaX, int deltaY);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void dc_view_key(string viewId, int isDown, int windowsKeyCode, int nativeKeyCode, uint modifiers, ushort character);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dc_view_invalidate(string viewId);
 
     [LibraryImport(Dll)]
     internal static partial IntPtr dc_version();
