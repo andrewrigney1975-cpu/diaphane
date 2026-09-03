@@ -70,3 +70,29 @@ substitution (rewrites every google/gstatic/etc. URL in the source), + the ~53 c
 - Official build (`is_official_build=true` + PGO) for release
 - Widevine: opt-in CDM download flow (compiled in, not fetched)
 - CI: nightly engine build + the no-phone-home MITM gate (M7)
+
+---
+
+# M2 — DiaphaneCore bridge: ✅ COMPLETE (2026-09-04)
+
+`DiaphaneCore.dll` + `diaphane_helper.exe` built against the M1 SDK. Flat C ABI
+(`src/Diaphane.Core/native/include/diaphane_core.h`) → P/Invoke → `CefEngine : IBrowserEngine`.
+
+**Gate met:** `dotnet test tests/Diaphane.Core.Tests` drives a headless `data:` + https
+load end-to-end (C# → DiaphaneCore → libcef_dll_wrapper → libcef → Chromium 151), title
+callback flows back to C#. Also `tools/HeadlessLoad` as a console app.
+
+Key points:
+- `libcef_dll_wrapper` is **rebuilt from SDK sources with MSVC** (`/MT`, C++20) so its
+  CRT/STL matches the bridge — the Chromium-built wrapper uses bundled libc++.
+- Exact wrapper source list from `cef_paths*.gypi` (`cef_wrapper_sources.cmake`) — a glob
+  pulls in DLL-side-only + bootstrap/sandbox trees that need full `//base`.
+- CEF wants an **STA thread**; the test uses a dedicated one, the WinUI shell's
+  dispatcher will satisfy it.
+- `CefExecuteProcess` must run before `CefInitialize` even in the browser process.
+- Needed one extra header vs the raw include tree: `net/base/net_error_list.h` →
+  `include/base/internal/cef_net_error_list.h` (CEF's `transfer.cfg`).
+- GCM "cannot start" errors in the log are **expected** — ungoogled disabled it.
+
+Bridge M2 stubs (later milestones): storage-clear (needs BrowsingDataRemover),
+extension loading, per-context proxy, windowed (non-OSR) HWND hosting.

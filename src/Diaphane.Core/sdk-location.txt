@@ -1,8 +1,0 @@
-CEF SDK built by engine/scripts/ — not committed (590 MB, outside the repo):
-  F:\cef-build\dist\cef\
-    include\        CEF C API + C++ wrapper headers
-    Release\        libcef.dll, libcef.dll.lib, libcef_dll_wrapper.lib, ANGLE, SwiftShader, snapshots
-    Resources\      resources.pak, chrome_*_percent.pak, icudtl.dat, locales\ (84)
-
-Diaphane.Core.vcxproj links: Release\libcef.dll.lib + Release\libcef_dll_wrapper.lib,
-includes: include\. Runtime: copy Release\* and Resources\* next to diaphane.exe.

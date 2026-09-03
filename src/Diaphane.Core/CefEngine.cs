@@ -1,0 +1,128 @@
+using System.Collections.Concurrent;
+using Diaphane.Shell.Engine;
+using static Diaphane.Core.NativeMethods;
+
+namespace Diaphane.Core;
+
+public sealed record CefEngineOptions(
+    string ResourcesDir,
+    string LocalesDir,
+    string SubprocessPath,
+    string RootCacheDir,
+    bool Windowless = false,
+    bool NoSandbox = false,
+    string? UserAgent = null);
+
+/// <summary>
+/// The real <see cref="IBrowserEngine"/> — a thin managed shell over DiaphaneCore.dll.
+/// Every member must be called from the single thread that also calls
+/// <see cref="DoMessageLoopWork"/> (CEF's UI thread).
+/// </summary>
+public sealed class CefEngine : IBrowserEngine, IDisposable
+{
+    private readonly SchedulePumpCb _pumpCb;           // rooted for the process lifetime
+    private readonly ConcurrentDictionary<string, CefBrowserView> _views = new();
+    private CefRequestContext? _standard;
+    private bool _initialized;
+
+    public CefEngine(CefEngineOptions o)
+    {
+        _pumpCb = (delayMs, _) => ScheduleMessagePump?.Invoke(this, delayMs);
+
+        var settings = new Settings
+        {
+            ResourcesDir = o.ResourcesDir,
+            LocalesDir = o.LocalesDir,
+            SubprocessPath = o.SubprocessPath,
+            RootCacheDir = o.RootCacheDir,
+            UserAgent = o.UserAgent,
+            Windowless = o.Windowless ? 1 : 0,
+            NoSandbox = o.NoSandbox ? 1 : 0,
+        };
+
+        if (dc_initialize(settings, _pumpCb, IntPtr.Zero) == 0)
+            throw new InvalidOperationException("CefInitialize failed (see DiaphaneCore/CEF logs).");
+        _initialized = true;
+    }
+
+    public string Version => PtrToUtf8(dc_version());
+
+    public event EventHandler<int>? ScheduleMessagePump;
+
+    public void DoMessageLoopWork() => dc_pump();
+
+    public IRequestContext StandardContext =>
+        _standard ??= new CefRequestContext(PtrToUtf8(dc_context_standard()), persistent: true, owned: false);
+
+    public IRequestContext CreateContext(RequestContextOptions options)
+    {
+        var p = dc_context_create(options.Persistent ? 1 : 0, options.CachePath, options.ProxyUri);
+        if (p == IntPtr.Zero) throw new InvalidOperationException("CefRequestContext::CreateContext failed.");
+        return new CefRequestContext(PtrToUtf8(p), options.Persistent, owned: true);
+    }
+
+    public IBrowserView CreateView(IRequestContext context, nint hostHwnd)
+    {
+        var ctxId = ((CefRequestContext)context).Id2;
+        var view = new CefBrowserView(ctxId, hostHwnd);
+        _views[view.NativeId] = view;
+        view.Closed += (_, _) => _views.TryRemove(view.NativeId, out _);
+        return view;
+    }
+
+    public void Dispose()
+    {
+        if (!_initialized) return;
+        foreach (var v in _views.Values) v.Dispose();
+        _views.Clear();
+        dc_shutdown();
+        _initialized = false;
+    }
+}
+
+internal sealed class CefRequestContext(string id, bool persistent, bool owned) : IRequestContext
+{
+    public Guid Id { get; } = DeterministicGuid(id);
+    internal string Id2 { get; } = id;
+    public bool IsPersistent => persistent;
+    public IReadOnlyList<ExtensionInfo> Extensions => Array.Empty<ExtensionInfo>();
+
+    public Task ClearCookiesAsync(DateTimeOffset? since = null)
+    {
+        dc_context_clear_cookies(Id2, since?.ToUnixTimeSeconds() ?? 0);
+        return Task.CompletedTask;
+    }
+
+    public Task ClearStorageAsync(DateTimeOffset? since = null)
+    {
+        dc_context_clear_storage(Id2, since?.ToUnixTimeSeconds() ?? 0);
+        return Task.CompletedTask;
+    }
+
+    public Task ClearHttpCacheAsync()
+    {
+        dc_context_clear_cache(Id2);
+        return Task.CompletedTask;
+    }
+
+    public Task FlushDnsAsync()
+    {
+        dc_context_flush_dns(Id2);
+        return Task.CompletedTask;
+    }
+
+    public Task<ExtensionInfo> LoadExtensionAsync(string path) =>
+        throw new NotImplementedException("Extension loading lands in a later milestone.");
+
+    public void Dispose()
+    {
+        if (owned) dc_context_release(Id2);
+    }
+
+    private static Guid DeterministicGuid(string s)
+    {
+        Span<byte> b = stackalloc byte[16];
+        System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(s)).AsSpan(0, 16).CopyTo(b);
+        return new Guid(b);
+    }
+}

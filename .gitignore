@@ -9,3 +9,6 @@ engine/third_party/ungoogled/*/
 !engine/**/expected/*.dll
 artifacts/
 TestResults/
+
+# M2 native bridge build output
+src/Diaphane.Core/native/build/
