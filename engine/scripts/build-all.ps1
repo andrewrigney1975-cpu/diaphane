@@ -51,13 +51,26 @@ Write-Host "gclient_hook exit=$LASTEXITCODE"
 (Select-String -Path "$root\ba-hook.log" -Pattern 'patches total|failed to apply' | Select-Object -Last 3).Line
 
 Write-Host "=== 4. ungoogled patches on top (fuzz 3, skip conflicts) ==="
+# For a libcef build, skip the ungoogled *browser* flag system (add-flag-*,
+# add-flags-*, the flag-infra headers/components) and a few pure-UI patches: they
+# need chrome/browser/ungoogled/* + ungoogled_flag_entries.h wired into the
+# ungoogled browser, don't apply cleanly under CEF-first, and leave orphaned code
+# that fails to compile (e.g. toolbar_view.cc show_avatar_toolbar_button). Keep
+# everything else in extra/ (webrtc-ip-policy, intranet-redirect-detector,
+# default-prefs, disable-battery-status, updater-disable-auto-update, ...).
+$denyRe = 'add-flag|add-flags-for|add-ungoogled-flag-headers|add-components-ungoogled|' +
+          'add-credits|add-extra-channel-info|add-suggestions-url-field|first-run-page|' +
+          'keep-expired-flags|remove-uneeded-ui|enable-menu-on-reload-button|' +
+          'enable-paste-and-go-new-tab-button|restore-classic-ntp|disable-formatting-in-omnibox|' +
+          'disable-rlz'
 $applied=0; $skipped=@()
 Get-Content "$ung\patches\series" | Where-Object { $_ -and -not $_.StartsWith('#') } | ForEach-Object {
-    $pf = Join-Path "$ung\patches" $_
-    if ($_ -match 'disable-rlz') { $skipped += $_; return }  # breaks GN: CEF forces enable_rlz=true
+    $p = $_
+    $pf = Join-Path "$ung\patches" $p
+    if ($p -match $denyRe) { $skipped += $p; return }
     & $env:PATCH_BIN -p1 --forward --fuzz=3 --no-backup-if-mismatch -d $src -i $pf --dry-run *> $null
     if ($LASTEXITCODE -eq 0) { & $env:PATCH_BIN -p1 --forward --fuzz=3 --no-backup-if-mismatch -d $src -i $pf *> $null; $applied++ }
-    else { $skipped += $_ }
+    else { $skipped += $p }
 }
 $skipped | Set-Content "$root\ungoogled-skipped.txt"
 Write-Host "ungoogled applied=$applied skipped=$($skipped.Count)"
@@ -67,6 +80,9 @@ Remove-Item -Force "$root\domsub.tar.gz" -EA SilentlyContinue
 & $py "$ung\utils\domain_substitution.py" apply -r "$ung\domain_regex.list" `
     -f "$ung\domain_substitution.list" -c "$root\domsub.tar.gz" $src *> "$root\ba-domsub.log"
 Write-Host "domsub exit=$LASTEXITCODE"
+
+Write-Host "=== 5b. diaphane build fixes (SDK 26100, ungoogled<->CEF, grd staleness) ==="
+& powershell -ExecutionPolicy Bypass -File "$root\apply-diaphane-fixes.ps1" -src $src
 
 Write-Host "=== 6. merge ungoogled flags.gn + re-gn-gen ==="
 if (-not (Test-Path "$out\args.gn")) { Write-Host "BUILD_ALL_DONE no_args_gn (gclient_hook failed at step 3)"; exit 1 }
