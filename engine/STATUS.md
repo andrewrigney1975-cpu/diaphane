@@ -1,83 +1,72 @@
-# M1 engine build — status
+# M1 engine build — status: ✅ COMPLETE (reduced patch set)
 
-**Building on:** this machine. 24 cores, 128 GB RAM, F: drive (1.3 TB free).
-Workspace: `F:\cef-build\` (outside the repo — the checkout is ~150 GB).
+**Built on this machine** (24 cores, 128 GB RAM, F: drive). Workspace `F:\cef-build\`.
+Final successful build: 2026-09-04. Total wall time across iterations: ~2 days (mostly
+compile + a long tail of ungoogled↔CEF↔SDK-26100 patch conflicts).
+
+## Result
+| | |
+|---|---|
+| `libcef.dll` | 441 MB — `151.3.24+g2384915+chromium-151.0.7922.174` |
+| `cefsimple.exe` | runs; loaded wikipedia.org across 7 processes, stable |
+| Codecs | `proprietary_codecs=true ffmpeg_branding="Chrome"` → H.264/AAC + VP8/9, AV1, Opus, Vorbis, FLAC, MP3 (verified in `third_party/ffmpeg/.../Chrome/win/x64/config.h`) |
+| Config | Release, **non-official** (no LTO/PGO — M1 speed; official is a later pass) |
+| SDK | `F:\cef-build\dist\cef\` — `include/`, `Release/` (libcef.dll + .lib + libcef_dll_wrapper.lib + ANGLE + SwiftShader + snapshots), `Resources/` (paks, icudtl, 84 locales). Assembled by `engine/scripts/assemble-sdk.ps1`. |
 
 ## Target
 | | |
 |---|---|
-| CEF branch | `7922` (stable) |
-| Chromium | `151.0.7922.174` |
-| ungoogled-chromium tag | `151.0.7922.173-1` (closest; expect minor patch fuzz on `.174`) |
-| Toolchain | VS 2026 Community v18.8 + Windows SDK 10.0.26100, `DEPOT_TOOLS_WIN_TOOLCHAIN=0` |
-| GN | `is_official_build=true proprietary_codecs=true ffmpeg_branding="Chrome" enable_widevine=false safe_browsing_mode=0` + ungoogled `flags.gn` |
+| CEF branch | `7922` (stable) → Chromium `151.0.7922.174` |
+| ungoogled tag | `151.0.7922.173-1` (closest; no `.174` exists) |
+| Toolchain | VS 2026 Community v18.8 + Windows SDK 10.0.26100, CEF `WIN_CUSTOM_TOOLCHAIN=1` |
 
-## Pipeline (scripts in `engine/scripts/`, run from `F:\cef-build\`)
-1. **`checkout.ps1`** — `automate-git.py --branch=7922 --no-build --no-distrib`. Chromium + CEF source, no build. *(running)*
-2. **`apply-ungoogled.ps1`** — `prune_binaries` → `patches.py apply` (111 patches) → `domain_substitution` → stage `flags.gn`.
-3. **`build.ps1`** — `gclient_hook.py` (cef_create_projects) → append ungoogled flags to `args.gn` → `gn gen` → `autoninja -C out/Release_GN_x64 cef`.
+## Build pipeline (`engine/scripts/`, run from `F:\cef-build\`)
+1. **`build-all.ps1`** — one pass: reset pristine → (prune skipped) → CEF `gclient_hook`
+   (CEF patches, once) → ungoogled patches on top (`patch --fuzz=3`, denylist) → domain
+   substitution → **`apply-diaphane-fixes.ps1`** → merge `flags.gn` → `gn gen` → `autoninja`.
+2. **`gn-build.ps1`** — just `gn gen` + `autoninja` (resume after a manual tree fix).
+3. **`assemble-sdk.ps1`** — hand-assemble the binary SDK (make_distrib needs the full
+   `cef` target; we build the `cefsimple libcef libcef_dll_wrapper` subset).
 
-## Gate
-`cefsimple.exe` from `out/Release_GN_x64/` plays an H.264 MP4 and a VP9 WebM.
+## Ungoogled patch set: ~53 of 109 applied
+CORE network/telemetry hardening applied. **Skipped** (see `engine/scripts/ungoogled-skipped.txt`):
+- the `add-flag-*` / `add-flags-*` browser-flag family + `add-components-ungoogled` +
+  `add-ungoogled-flag-headers` — need the ungoogled *browser* flag system; half-apply
+  under CEF-first and leave code that won't compile
+- `remove-unused-preferences-fields` (300-file patch, fuzzes inconsistently → dangling
+  `prefs::k*`) + its companion `move-js-optimizer-unfamiliar-sites`
+- `fix-building-without-safebrowsing` (123 hunks, doesn't rebase clean onto Cr151) →
+  **`safe_browsing_mode` left at Chromium default (1)**; SB is disabled at runtime by the
+  default-prefs patch and de-phoned by the iridium reporting patches. Compile-time SB
+  removal is the top backlog item.
+- `disable-rlz` (CEF hard-requires `enable_rlz=true` for CDM storage id)
+- ~24 more that don't apply under `--fuzz=3` against the CEF-patched tree
 
-## Known risk points (resolve as hit)
-- **VS 2026 (v18.x):** Chromium 151's `build/vs_toolchain.py` may not recognize toolchain version 18.
-  Mitigation in scripts: `GYP_MSVS_VERSION=2022` + `GYP_MSVS_OVERRIDE_PATH`. May still need a one-line
-  patch to `vs_toolchain.py` to accept `18.0` as `2022`-equivalent.
-- **ungoogled patch fuzz:** `.173` patches onto a `.174` tree — a handful of patches may need `-3` fuzz
-  or manual rebasing. `patches.py apply` reports which.
-- **`is_official_build` + PGO:** forced `chrome_pgo_phase=0` to skip PGO profile download. Revisit for
-  release builds.
-- **OS long paths:** not enabled (needs admin). `git core.longpaths=true` set; short workspace root
-  chosen to compensate.
+Privacy still substantially intact: GN `flags.gn` (no Google API keys, `enable_reporting=false`,
+`safe_browsing` runtime-off, no field-trial config, no hangout/mdns/remoting), domain
+substitution (rewrites every google/gstatic/etc. URL in the source), + the ~53 core patches.
 
-## Progress log
+## diaphane build fixes (`apply-diaphane-fixes.ps1`, idempotent, post-domsub)
+1. `message_compiler.py` ×2 — Win SDK 26100 `mc.exe` emits extra `*TEMP.BIN`/`*_MSG*.bin`
+2. `bake_in_configs.py` — domain_reliability whitelist vs domsub'd configs
+3. `grit/tool/build.py` — `--assert-file-list` set-equal/order-artifact tolerance
+4. `toolchain.gni` — `alink` `/llvmlibempty` (empty `safe_browsing.lib` under `/WX`)
+5. `cef_strings.grd` — +27 Cr151 `platform_pak_locales` missing from CEF 7922's grd
 
-> **Lesson 4:** ungoogled `prune_binaries.py` CONTINGENT_PATHS deletes every Google
-> prebuilt toolchain: `third_party/llvm-build` (clang), `rust-toolchain`, `ninja`,
-> `siso/cipd`. When building *with* Google tooling, pass `--keep-contingent-paths`.
-> We ran without it, so `restore-clang.ps1` / `restore-rust.ps1` re-fetch the exact
-> packages from DEPS; ninja+siso restored via `gclient sync -j1 --nohooks` (cipd deps,
-> unaffected by the dirty patched src tree — patches survive).
+## Key lessons (chronological)
+1. `gclient sync` must pin `--revision src@<tag>` — bare sync rolled src to Chromium main (155).
+2. Toolchain (clang/rust/ninja/siso) is a **DEPS/gcs** dependency, not a hook — needs `gclient sync`.
+3. `git reset --hard` on `src` doesn't touch sub-repos (`src/third_party/depot_tools`, `src/tools/clang`).
+4. `gclient sync` on Windows needs `-j1` — parallel gsutil-bootstrap lock race (`LockFileEx` err 6).
+5. ungoogled `prune_binaries.py` deletes prebuilt toolchains + files DEPS needs → **skip prune** for local builds.
+6. **Never** have the `src/cef` junction present during `gclient sync --delete_unversioned_trees` (it deletes through the junction). Use a real directory; siso can't traverse junctions anyway.
+7. ungoogled CEF-first ordering: CEF patches on pristine (0 fail), ungoogled on top with fuzz + denylist.
+8. `remove-unused-preferences-fields` + `fix-building-without-safebrowsing` + the flag family are the fragile ones.
 
-### State reached
-- Chromium 151.0.7922.174, deps synced, hooks green (rc.exe etc.)
-- 109/109 ungoogled patches applied clean · domain substitution done · DEPS not substituted
-- clang 23 restored · rust restored · CEF junctioned at src/cef
-- Next: `gclient sync -j1 --nohooks` (ninja/siso) → stage3 (gclient_hook → gn gen → autoninja cef)
-
-
-> **Lesson 1:** always `gclient sync --revision src@<tag>`. Bare `gclient sync` let
-> `src` roll to Chromium main (155). Fixed by `pinsync.ps1` → `refs/tags/151.0.7922.174`.
->
-> **Lesson 2 (correct stage order):** ungoogled prune/patch/domain-substitution must run
-> *after* the toolchain is present. clang/rust come from a **DEPS entry** (`src/third_party/
-> llvm-build/Release+Asserts`), downloaded by `gclient sync` — not a hook. Domain substitution
-> rewrites `googleapis.com` inside `tools/clang/scripts/update.py` (→ unresolvable
-> `9oo91eapis.qjz9zk`), and pruning removes files DEPS references.
->
-> **Lesson 3:** `git reset --hard` on `src` does NOT revert domain substitution inside
-> `src/third_party/depot_tools`, `src/tools/clang`, etc. — those are separate git repos.
-> Reset each. A domain-substituted `depot_tools/lockfile.py` + `-j` parallel sync workers
-> racing the gsutil bootstrap lock = `Failed to lock handle (error code: 6)`. Use `-j1`.
-
-- Set up depot_tools (full clone), git config, workspace.
-- Fixed: shallow depot_tools clone broke `automate-git.py` compat-version pin → full clone.
-- `chromium/src` main tree checked out OK (~102 GB, 29.3M objects).
-- `gclient sync` (sub-deps) friction, resolved in stages:
-  - transient `git 128` on first pass → forced `--reset --delete_unversioned_trees` re-sync
-  - `third_party/litert/src` git-LFS: googlesource LFS mirror returns HTTP 405 on `batch`.
-    Blocked object is an **Android** prebuilt we don't need (Windows build) →
-    `GIT_LFS_SKIP_SMUDGE=1` + `filter.lfs.smudge/process --skip` leaves LFS pointers in place.
-    (`resync3.ps1`.) Revisit if a *Windows* LFS object turns out to be needed at build.
-
-> **Lesson 5:** NEVER have the `src/cef` junction present during
-> `gclient sync --delete_unversioned_trees` — it walks the junction and deletes the
-> real CEF checkout (incl. `.git`). Create the junction only after all `gclient sync`
-> runs are done. stage3 (`gclient_hook.py` → `gn gen` → `autoninja`) never calls sync.
-
-### Clean state reached (finally)
-- sync 0 · runhooks 0 · prune `--keep-contingent-paths` · 109 patches (825 ops, 0 fail) · domsub 0
-- clang=True rust=True ninja=True siso=True · CEF re-cloned @ 7922 · src/cef junction live
-- 13041 files changed in src (patches + domsub only; contingent paths kept)
-- RUNNING: stage3 — CEF project gen → gn gen (+ungoogled flags.gn) → autoninja cef
+## Backlog (post-M1)
+- Rebase `fix-building-without-safebrowsing` → get `safe_browsing_mode=0` (compile-time SB removal)
+- Port the ungoogled flag infrastructure so the valuable `extra/` patches work under CEF
+  (canvas-fp-noise, webgl-renderer-spoof, client-hints removal, clear-data-on-exit, reduce-system-info)
+- Official build (`is_official_build=true` + PGO) for release
+- Widevine: opt-in CDM download flow (compiled in, not fetched)
+- CI: nightly engine build + the no-phone-home MITM gate (M7)
