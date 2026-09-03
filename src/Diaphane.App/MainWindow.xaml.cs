@@ -50,8 +50,48 @@ public sealed partial class MainWindow : Window
                 File.AppendAllText(Path.Combine(Path.GetTempPath(), "diaphane-app.log"),
                     $"{DateTime.Now:o} Loaded FAILED:\n{ex}\n\n");
             }
+
+            if (Environment.GetEnvironmentVariable("DIAPHANE_SELFSHOT") is not null)
+                _ = SelfCaptureLoopAsync();
         };
         Closed += (_, _) => { Vm.Dispose(); _cef.Dispose(); };
+    }
+
+    // Diagnostic: RenderTargetBitmap captures the live XAML visual tree (incl. the
+    // CEF Image) straight from the compositor — the only reliable way to prove
+    // what actually rendered, since BitBlt/PrintWindow can't see WinUI DComp content.
+    private async System.Threading.Tasks.Task SelfCaptureLoopAsync()
+    {
+        var folder = await Windows.Storage.StorageFolder.GetFolderFromPathAsync(Path.GetTempPath());
+        for (int i = 0; i < 8; i++)
+        {
+            await System.Threading.Tasks.Task.Delay(2500);
+            try
+            {
+                var rtb = new Microsoft.UI.Xaml.Media.Imaging.RenderTargetBitmap();
+                await rtb.RenderAsync(Root);
+                var px = (await rtb.GetPixelsAsync()).ToArray();
+                long nonBlack = 0;
+                for (int k = 0; k < px.Length; k += 4)
+                    if (px[k] > 8 || px[k + 1] > 8 || px[k + 2] > 8) nonBlack++;
+                var file = await folder.CreateFileAsync($"diaphane-shot{i}.png",
+                    Windows.Storage.CreationCollisionOption.ReplaceExisting);
+                using var stream = await file.OpenAsync(Windows.Storage.FileAccessMode.ReadWrite);
+                var enc = await Windows.Graphics.Imaging.BitmapEncoder.CreateAsync(
+                    Windows.Graphics.Imaging.BitmapEncoder.PngEncoderId, stream);
+                enc.SetPixelData(Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8,
+                    Windows.Graphics.Imaging.BitmapAlphaMode.Premultiplied,
+                    (uint)rtb.PixelWidth, (uint)rtb.PixelHeight, 96, 96, px);
+                await enc.FlushAsync();
+                File.AppendAllText(Path.Combine(Path.GetTempPath(), "diaphane-app.log"),
+                    $"{DateTime.Now:o} selfshot {i}: {rtb.PixelWidth}x{rtb.PixelHeight} nonBlackPx={nonBlack}\n");
+            }
+            catch (Exception ex)
+            {
+                File.AppendAllText(Path.Combine(Path.GetTempPath(), "diaphane-app.log"),
+                    $"{DateTime.Now:o} selfshot {i}: {ex.Message}\n");
+            }
+        }
     }
 
     private void OnVmPropertyChanged(object? s, PropertyChangedEventArgs e)

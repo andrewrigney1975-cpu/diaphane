@@ -39,6 +39,8 @@ public sealed class TabModel : INotifyPropertyChanged
     public bool CanGoBack => _view.CanGoBack;
     public bool CanGoForward => _view.CanGoForward;
 
+    public override string ToString() => string.IsNullOrEmpty(Title) ? "New Tab" : Title;
+
     public void Navigate(string url) => _view.Navigate(url);
     public void Reload() => _view.Reload();
     public void Back() => _view.GoBack();

@@ -22,9 +22,9 @@
                           TabCloseRequested="OnTabClose"
                           CanReorderTabs="True">
             <controls:TabView.TabItemTemplate>
-                <DataTemplate x:DataType="tabs:TabModel">
-                    <TextBlock Text="{x:Bind Title, Mode=OneWay}" TextTrimming="CharacterEllipsis"
-                               MaxWidth="200" VerticalAlignment="Center" />
+                <DataTemplate>
+                    <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis"
+                               MaxWidth="220" VerticalAlignment="Center" />
                 </DataTemplate>
             </controls:TabView.TabItemTemplate>
         </controls:TabView>

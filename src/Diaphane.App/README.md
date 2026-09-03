@@ -21,27 +21,19 @@ Requires `src/Diaphane.Core/native/build/bin` (run `native/build.ps1` first) —
   machine's real Chrome/Edge profile — bookmarks, session, everything. Never do that.
 - CEF initialises and spawns its subprocesses (via `diaphane_helper.exe`).
 
-## Rendering: OSR path wired; WinUI 3 compositor not verified here
+## Rendering: OSR — works
 
-The shell renders CEF **off-screen** (windowless): `CefHost` inits the engine with
-`Windowless: true`, `CefBrowserView` implements `IOffscreenBrowserView`, and
-`MainWindow` blits each `OnPaint` BGRA frame into a `WriteableBitmap` behind an
-`Image`, forwarding pointer / wheel / key / char input to
+The shell renders CEF **off-screen**: `CefHost` inits `Windowless: true`,
+`CefBrowserView : IOffscreenBrowserView`, `MainWindow` blits each `OnPaint` BGRA frame
+into a `WriteableBitmap` behind an `Image` and forwards pointer / wheel / key / char to
 `CefBrowserHost::SendMouse*Event` / `SendKeyEvent`.
 
-Windowed hosting (`SetAsChild`) was tried first and abandoned: Chromium's windowed
-GPU compositor hits `FATAL:ui\gl\child_window_win.cc:117 NOTREACHED` when the browser
-HWND is a child of the WinUI content island (an interposing plain-Win32 child window
-didn't help). Process-wide GPU switches fix that crash but break WinUI 3's own
-compositor — they share the process. OSR sidesteps all of it.
+Windowed hosting (`SetAsChild`) was tried and abandoned: Chromium's windowed GPU
+compositor hits `child_window_win.cc:117 NOTREACHED` when the browser HWND is a child of
+the WinUI content island (an interposing Win32 child window didn't help). OSR sidesteps it.
 
-**Not visually verified in this build environment:** a bare
-`<Grid Background="Crimson"><TextBlock/></Grid>` WinUI 3 window also renders nothing
-here — the window is created and visible but never composites (same signature as
-CEF's GPU process: `Failed to create shared context for virtualization`). This
-machine's D3D/GPU state doesn't support accelerated composition in this context;
-the user's own Chrome/Edge render fine, so it is environment- or driver-specific.
-Run `Diaphane.App` on a box where WinUI 3 composites to see it.
-
-Debug: unhandled exceptions and paint failures are appended to
+### Capturing the window
+GDI BitBlt and `PrintWindow` **cannot see WinUI 3 DirectComposition content** — use
+`RenderTargetBitmap.RenderAsync`. Set `DIAPHANE_SELFSHOT=1` and the app dumps frames to
+`%TEMP%\diaphane-shot*.png`. Unhandled exceptions and paint errors go to
 `%TEMP%\diaphane-app.log`.

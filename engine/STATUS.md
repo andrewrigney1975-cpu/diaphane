@@ -140,3 +140,28 @@ here (same root cause as CEF's GPU `Failed to create shared context for virtuali
 This box has no working accelerated composition in this context (the user's own Chrome/
 Edge render fine, so it's driver/session-specific). App + bridge code is complete and
 builds; run `Diaphane.App` where WinUI 3 composites to see pages render.
+
+---
+
+# M3 — CORRECTION: ✅ IT WORKS
+
+The "content black / no accelerated composition" conclusion above was **wrong** — an
+artefact of screen-capture tooling, not the app.
+
+`Graphics.CopyFromScreen` (GDI BitBlt) and `PrintWindow` **cannot capture WinUI 3
+DirectComposition content**: BitBlt returned the desktop wallpaper, PrintWindow returned
+the frame with a black content area. `RenderTargetBitmap.RenderAsync` (reads from the
+compositor) shows the truth: **~96% non-black pixels, DuckDuckGo fully rendered in the
+shell** (`engine/m3-running.png`). The Intel Arc A770 is fine; D3D11 hardware device
+creation succeeds in-process.
+
+So M3 is done: WinUI 3 shell + tabs + omnibox + history/bookmarks + **CEF pages
+rendering via OSR** into a `WriteableBitmap`, mouse/keyboard forwarded. Profile isolation
+fix (CEF was inheriting the real Chrome/Edge profile) is in.
+
+Diagnostic: set `DIAPHANE_SELFSHOT=1` → the app dumps `RenderTargetBitmap` frames to
+`%TEMP%\diaphane-shot*.png`.
+
+## M3 polish backlog
+- tab header, favicon in tab, CEF sandbox (currently no_sandbox), IME, per-monitor DPI on the OSR surface
+- `--disable-gpu-compositing` scoped test (OSR still spins a GPU process that logs child_window NOTREACHED but recovers)
