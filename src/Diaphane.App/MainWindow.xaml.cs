@@ -293,6 +293,8 @@ public sealed partial class MainWindow : Window
     private void OnKeyDown(object sender, KeyRoutedEventArgs e) => _page.KeyDown(e);
     private void OnKeyUp(object sender, KeyRoutedEventArgs e) => _page.KeyUp(e);
     private void OnChar(UIElement sender, CharacterReceivedRoutedEventArgs e) => _page.Char(e);
+    private void OnPageGotFocus(object sender, RoutedEventArgs e) => _page.GotFocus();
+    private void OnPageLostFocus(object sender, RoutedEventArgs e) => _page.LostFocus();
 
     // ---- docked DevTools surface ----
     private void OnDevToolsRegionChanged(object sender, SizeChangedEventArgs e) => _dev.Resize();
@@ -304,6 +306,8 @@ public sealed partial class MainWindow : Window
     private void OnDevKeyDown(object sender, KeyRoutedEventArgs e) => _dev.KeyDown(e);
     private void OnDevKeyUp(object sender, KeyRoutedEventArgs e) => _dev.KeyUp(e);
     private void OnDevChar(UIElement sender, CharacterReceivedRoutedEventArgs e) => _dev.Char(e);
+    private void OnDevGotFocus(object sender, RoutedEventArgs e) => _dev.GotFocus();
+    private void OnDevLostFocus(object sender, RoutedEventArgs e) => _dev.LostFocus();
 
     // ---- DevTools pane splitter ----
     private bool _draggingSplitter;

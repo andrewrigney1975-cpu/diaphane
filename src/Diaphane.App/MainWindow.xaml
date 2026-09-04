@@ -162,10 +162,11 @@
                   SizeChanged="OnBrowserRegionChanged">
                 <Image x:Name="BrowserImage" Stretch="None"
                        HorizontalAlignment="Left" VerticalAlignment="Top"
-                       IsTabStop="True" ManipulationMode="None"
+                       IsTabStop="True" ManipulationMode="None" UseSystemFocusVisuals="False"
                        PointerMoved="OnPointerMoved" PointerPressed="OnPointerPressed"
                        PointerReleased="OnPointerReleased" PointerExited="OnPointerExited"
                        PointerWheelChanged="OnPointerWheel"
+                       GotFocus="OnPageGotFocus" LostFocus="OnPageLostFocus"
                        KeyDown="OnKeyDown" KeyUp="OnKeyUp" CharacterReceived="OnChar" />
                 <ProgressBar x:Name="LoadBar" VerticalAlignment="Top" IsIndeterminate="True"
                              Visibility="Collapsed" />
@@ -183,10 +184,11 @@
                   SizeChanged="OnDevToolsRegionChanged">
                 <Image x:Name="DevToolsImage" Stretch="None"
                        HorizontalAlignment="Left" VerticalAlignment="Top"
-                       IsTabStop="True" ManipulationMode="None"
+                       IsTabStop="True" ManipulationMode="None" UseSystemFocusVisuals="False"
                        PointerMoved="OnDevPointerMoved" PointerPressed="OnDevPointerPressed"
                        PointerReleased="OnDevPointerReleased" PointerExited="OnDevPointerExited"
                        PointerWheelChanged="OnDevPointerWheel"
+                       GotFocus="OnDevGotFocus" LostFocus="OnDevLostFocus"
                        KeyDown="OnDevKeyDown" KeyUp="OnDevKeyUp" CharacterReceived="OnDevChar" />
             </Grid>
         </Grid>

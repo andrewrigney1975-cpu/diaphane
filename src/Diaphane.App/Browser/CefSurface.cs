@@ -90,8 +90,15 @@ internal sealed class CefSurface(Image image, FrameworkElement host)
         image.Focus(FocusState.Pointer);
         image.CapturePointer(e.Pointer);
         var (x, y) = Px(e);
+        // OSR: the browser must be told it has focus or clicks won't land DOM
+        // focus on form fields and key events are dropped.
+        _view?.SetFocus(true);
+        _view?.SendMouseMove(x, y, false);
         _view?.SendMouseButton(x, y, ButtonOf(e), true, 1);
     }
+
+    public void GotFocus() => _view?.SetFocus(true);
+    public void LostFocus() => _view?.SetFocus(false);
 
     public void PointerReleased(PointerRoutedEventArgs e)
     {
@@ -108,7 +115,8 @@ internal sealed class CefSurface(Image image, FrameworkElement host)
 
     public void KeyDown(KeyRoutedEventArgs e) => SendKey(e, true);
     public void KeyUp(KeyRoutedEventArgs e) => SendKey(e, false);
-    public void Char(CharacterReceivedRoutedEventArgs e) => _view?.SendKey(true, 0, 0, 0, e.Character);
+    public void Char(CharacterReceivedRoutedEventArgs e)
+        => _view?.SendKey(true, e.Character, 0, 0, e.Character);
 
     private void SendKey(KeyRoutedEventArgs e, bool down)
     {
