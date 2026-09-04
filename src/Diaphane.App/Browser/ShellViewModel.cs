@@ -235,6 +235,9 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
         ActiveTab = Tabs[(i - 1 + Tabs.Count) % Tabs.Count];
     }
 
+    /// <summary>Reorder open tabs to match a tab-strip drag. UI-driven, not a user command.</summary>
+    public void ReorderTabs(IReadOnlyList<TabModel> newOrder) => _tabs?.Reorder(newOrder);
+
     // ---- navigation ----
     [RelayCommand]
     public void Navigate(string? input)

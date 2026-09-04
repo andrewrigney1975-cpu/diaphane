@@ -48,6 +48,7 @@ public sealed partial class MainWindow : Window
         Vm = new ShellViewModel(_cef.Engine, dataDir, _extensions);
         Vm.PropertyChanged += OnVmPropertyChanged;
         Vm.Tabs.CollectionChanged += (_, _) => SyncTabStrip();
+        ((Windows.Foundation.Collections.IObservableVector<object>)TabStrip.TabItems).VectorChanged += OnTabItemsReordered;
         Vm.SettingsChanged += ApplyTheme;
         Vm.Settings.EngineVersion = $"diaphane {Vm.Settings.Version}  ·  {_cef.Engine.Version}";
         ApplyTheme();
@@ -374,6 +375,7 @@ public sealed partial class MainWindow : Window
     // properties change — the tab title would stay frozen at "New Tab".
     private readonly Dictionary<TabModel, TabViewItem> _tabItems = new();
     private bool _syncingStrip;
+    private bool _reorderingStrip;
 
     private void SyncTabStrip()
     {
@@ -430,6 +432,26 @@ public sealed partial class MainWindow : Window
         if (_tabItems.TryGetValue(t, out var item) &&
             item.Header is StackPanel { Children: [_, TextBlock tb] })
             tb.Text = t.Title;
+    }
+
+    // ---- tab strip drag-to-reorder ----
+    // TabView owns TabItems as a plain IList when built by hand (not TabItemsSource),
+    // but with CanReorderTabs=true it still moves the elements in place on a drag —
+    // observable via the underlying IObservableVector, same as ItemsControl.Items.
+    private void OnTabItemsReordered(Windows.Foundation.Collections.IObservableVector<object> sender,
+        Windows.Foundation.Collections.IVectorChangedEventArgs e)
+    {
+        if (_syncingStrip || _reorderingStrip) return;
+        var order = TabStrip.TabItems.OfType<TabViewItem>()
+            .Select(i => i.Tag as TabModel)
+            .Where(t => t is not null)
+            .Cast<TabModel>()
+            .ToList();
+        if (order.Count != Vm.Tabs.Count) return; // mid add/remove — ignore, a settle event follows
+
+        _reorderingStrip = true;
+        Vm.ReorderTabs(order);
+        _reorderingStrip = false;
     }
 
     private void OnAddTab(TabView sender, object args) => Vm.NewTab();

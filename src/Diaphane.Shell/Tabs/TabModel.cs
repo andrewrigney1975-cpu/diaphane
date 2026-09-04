@@ -151,6 +151,19 @@ public sealed class TabManager : IDisposable
             Activate(Tabs.LastOrDefault());
     }
 
+    /// <summary>Reorder tabs to match <paramref name="newOrder"/> (a permutation of
+    /// <see cref="Tabs"/>, as produced by a tab-strip drag). Ignored if the sets differ.</summary>
+    public void Reorder(IReadOnlyList<TabModel> newOrder)
+    {
+        if (newOrder.Count != Tabs.Count) return;
+        for (int i = 0; i < newOrder.Count; i++)
+        {
+            var current = Tabs.IndexOf(newOrder[i]);
+            if (current < 0) return;
+            if (current != i) Tabs.Move(current, i);
+        }
+    }
+
     public void Activate(TabModel? tab)
     {
         foreach (var t in Tabs) t.View.SetVisible(ReferenceEquals(t, tab));

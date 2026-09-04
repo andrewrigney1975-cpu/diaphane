@@ -26,7 +26,7 @@
                           AddTabButtonClick="OnAddTab"
                           SelectionChanged="OnTabSelectionChanged"
                           TabCloseRequested="OnTabClose"
-                          CanReorderTabs="False" />
+                          CanReorderTabs="True" />
 
         <!-- toolbar -->
         <Grid Grid.Row="1" Height="44" Padding="8,4" ColumnSpacing="4"
