@@ -14,6 +14,12 @@ public sealed class PrivacySettings
         ClearScope.Cookies | ClearScope.SiteStorage | ClearScope.HttpCache | ClearScope.History;
 
     public ClearTimeRange DefaultTimeRange { get; set; } = ClearTimeRange.Everything;
+
+    /// <summary>
+    /// Off by default. When on, diaphane permits the Widevine DRM module to load
+    /// <em>if it is already present</em> — it is never downloaded. Applied at launch.
+    /// </summary>
+    public bool EnableWidevine { get; set; }
 }
 
 /// <summary>Reads/writes <see cref="PrivacySettings"/> as a single JSON file. Never throws.</summary>

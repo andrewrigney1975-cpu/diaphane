@@ -263,3 +263,33 @@ window-close shuts down cleanly via `Engine.Dispose()`.
 Not yet done for M8: content-script / background-page runtime validation against
 a real page (needs the engine + a test extension), CRX (packed) install,
 per-Sandbox-context extension isolation.
+
+---
+
+# M9 — DevTools + codecs  ✅
+
+**DevTools.** New ABI `dc_view_show_devtools` / `dc_view_close_devtools` /
+`dc_view_has_devtools` → `CefBrowserHost::ShowDevTools` into a normal top-level
+popup window (works fine from the OSR main browser — it's a separate HWND tree,
+not parented into the WinUI island). F12 and Ctrl+Shift+I, plus a toolbar button.
+Verified: `HasDevTools` true after toggle, no GPU child-window crash.
+
+**Script evaluation.** `dc_view_eval_js` runs `Runtime.evaluate` via
+`CefBrowserHost::ExecuteDevToolsMethod` and routes the result JSON back through a
+`CefDevToolsMessageObserver` (own class — can't multiply-inherit two
+`CefBaseRefCounted`). Surfaced as `IBrowserView.EvaluateJavaScriptAsync` →
+`TaskCompletionSource` keyed by CDP message id. No render-process code needed.
+
+**Media & codecs** (`diaphane://media`, Ctrl+Shift+M). `Diaphane.Shell.Media.MediaProbe`
+— a self-contained expression running `canPlayType` / `MediaSource.isTypeSupported`
+/ `requestMediaKeySystemAccess` in the page; `MediaViewModel` renders the table.
+Live result on this build: **H.264, AAC, MP3, VP9, AV1, Opus, FLAC, Vorbis all
+"Probably"** (confirms the M1 Chrome-branded ffmpeg), H.265 absent, Clear Key EME
+available, Widevine/PlayReady not available.
+
+**Widevine opt-in.** `PrivacySettings.EnableWidevine` (default **off**) →
+`dc_settings.allow_widevine`; when off, `DcApp` appends `WidevineCdm` to
+`--disable-features`. Checkbox in the privacy panel. The module is **never
+downloaded** — the toggle only permits an already-present CDM. Applied at launch.
+
+Tests: `MediaProbe` parse + `TabModel` devtools/eval — 35 shell tests green.

@@ -4,7 +4,9 @@
 #include <string>
 
 #include "include/cef_client.h"
+#include "include/cef_devtools_message_observer.h"
 #include "include/cef_jsdialog_handler.h"
+#include "include/cef_registration.h"
 #include "include/diaphane_core.h"
 
 // One DcClient per browser view. Forwards the handful of CEF events the shell
@@ -22,6 +24,10 @@ class DcClient : public CefClient,
   const std::string& view_id() const { return view_id_; }
   void set_size(int w, int h) { width_ = w; height_ = h; }
   void set_pending_url(const std::string& u) { pending_url_ = u; }
+
+  // Lazily register a DevTools message observer and route Runtime.evaluate
+  // results to |cb|. Safe to call repeatedly (updates the callback).
+  void EnsureEvalObserver(dc_eval_cb cb, void* user);
 
   // CefClient
   CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override { return this; }
@@ -72,6 +78,9 @@ class DcClient : public CefClient,
   std::string pending_url_;   // navigation requested before OnAfterCreated
   int width_;
   int height_;
+
+  CefRefPtr<CefDevToolsMessageObserver> eval_observer_;
+  CefRefPtr<CefRegistration> devtools_reg_;   // keeps the observer registered
 
   IMPLEMENT_REFCOUNTING(DcClient);
   DISALLOW_COPY_AND_ASSIGN(DcClient);

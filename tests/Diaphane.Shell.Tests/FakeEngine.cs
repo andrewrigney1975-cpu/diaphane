@@ -64,6 +64,14 @@ public sealed class FakeView : IBrowserView
     public void SetBounds(int x, int y, int w, int h) { }
     public void SetVisible(bool v) => Visible = v;
     public void SetFocus(bool f) { }
+
+    public bool DevToolsOpen { get; private set; }
+    public void ShowDevTools() => DevToolsOpen = true;
+    public void CloseDevTools() => DevToolsOpen = false;
+    public bool HasDevTools => DevToolsOpen;
+    public Func<string, string> EvalHandler { get; set; } = _ => "null";
+    public Task<string> EvaluateJavaScriptAsync(string script) => Task.FromResult(EvalHandler(script));
+
     public void Dispose() { }
 
     public event EventHandler<NavigationState>? NavigationStateChanged;

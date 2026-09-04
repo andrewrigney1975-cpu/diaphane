@@ -17,7 +17,8 @@ public sealed class CefHost : IDisposable
 
     public CefEngine Engine { get; }
 
-    public CefHost(DispatcherQueue dispatcher, string nativeBinDir, IReadOnlyList<string>? extensionDirs = null)
+    public CefHost(DispatcherQueue dispatcher, string nativeBinDir,
+                   IReadOnlyList<string>? extensionDirs = null, bool allowWidevine = false)
     {
         _dispatcher = dispatcher;
 
@@ -31,7 +32,8 @@ public sealed class CefHost : IDisposable
                 "Diaphane", "UserData")),
             Windowless: true,    // OSR — the shell owns the surface (windowed hosting hits the GPU child-window NOTREACHED)
             NoSandbox: true,     // TODO(M-later): validate the CEF sandbox + helper, then flip.
-            ExtensionDirs: extensionDirs));
+            ExtensionDirs: extensionDirs,
+            AllowWidevine: allowWidevine));
 
         _pumpTimer = _dispatcher.CreateTimer();
         _pumpTimer.IsRepeating = false;

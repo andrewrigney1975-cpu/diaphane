@@ -29,6 +29,7 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _showBookmarksBar = true;
     [ObservableProperty] private bool _showPrivacyPanel;
     [ObservableProperty] private bool _showExtensionsPanel;
+    [ObservableProperty] private bool _showMediaPanel;
 
     public ObservableCollection<TabModel> Tabs { get; } = new();
     public ObservableCollection<Bookmark> BookmarksBar { get; } = new();
@@ -36,6 +37,7 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     private readonly PrivacyService _privacyService;
     public PrivacyViewModel Privacy { get; }
     public ExtensionsViewModel Extensions { get; }
+    public MediaViewModel MediaTools { get; }
 
     public bool CanGoBack => ActiveTab?.CanGoBack ?? false;
     public bool CanGoForward => ActiveTab?.CanGoForward ?? false;
@@ -52,6 +54,7 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
             new PrivacySettingsStore(Path.Combine(dataDir, "privacy.json")));
         Privacy = new PrivacyViewModel(_privacyService);
         Extensions = new ExtensionsViewModel(extensions);
+        MediaTools = new MediaViewModel(() => ActiveTab);
     }
 
     /// <summary>Run the configured clear-on-exit wipe. Called from the window's Closed handler.</summary>
@@ -195,14 +198,14 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
         {
             case "privacy":
             case "settings":
-                ShowExtensionsPanel = false;
-                ShowPrivacyPanel = true;
-                AddressText = "diaphane://privacy";
+                OpenPanel(p => ShowPrivacyPanel = p, "diaphane://privacy");
                 return true;
             case "extensions":
-                ShowPrivacyPanel = false;
-                ShowExtensionsPanel = true;
-                AddressText = "diaphane://extensions";
+                OpenPanel(p => ShowExtensionsPanel = p, "diaphane://extensions");
+                return true;
+            case "media":
+            case "codecs":
+                OpenPanel(p => ShowMediaPanel = p, "diaphane://media");
                 return true;
             case "newtab":
                 return false; // handled as a real (blank) navigation
@@ -211,27 +214,53 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
         }
     }
 
+    // Only one internal panel is visible at a time.
+    private void OpenPanel(Action<bool> set, string address)
+    {
+        ShowPrivacyPanel = ShowExtensionsPanel = ShowMediaPanel = false;
+        set(true);
+        AddressText = address;
+    }
+
+    private void ClosePanel(bool wasOpen, string address)
+    {
+        if (AddressText == address) AddressText = Presentable(ActiveTab?.Url ?? "");
+    }
+
     [RelayCommand] public void TogglePrivacyPanel()
     {
-        ShowExtensionsPanel = false;
-        ShowPrivacyPanel = !ShowPrivacyPanel;
+        if (ShowPrivacyPanel) { ShowPrivacyPanel = false; ClosePanel(true, "diaphane://privacy"); }
+        else OpenPanel(p => ShowPrivacyPanel = p, "diaphane://privacy");
     }
     [RelayCommand] public void ClosePrivacyPanel()
     {
         ShowPrivacyPanel = false;
-        if (AddressText == "diaphane://privacy") AddressText = Presentable(ActiveTab?.Url ?? "");
+        ClosePanel(true, "diaphane://privacy");
     }
 
     [RelayCommand] public void ToggleExtensionsPanel()
     {
-        ShowPrivacyPanel = false;
-        ShowExtensionsPanel = !ShowExtensionsPanel;
+        if (ShowExtensionsPanel) { ShowExtensionsPanel = false; ClosePanel(true, "diaphane://extensions"); }
+        else OpenPanel(p => ShowExtensionsPanel = p, "diaphane://extensions");
     }
     [RelayCommand] public void CloseExtensionsPanel()
     {
         ShowExtensionsPanel = false;
-        if (AddressText == "diaphane://extensions") AddressText = Presentable(ActiveTab?.Url ?? "");
+        ClosePanel(true, "diaphane://extensions");
     }
+
+    [RelayCommand] public void ToggleMediaPanel()
+    {
+        if (ShowMediaPanel) { ShowMediaPanel = false; ClosePanel(true, "diaphane://media"); }
+        else OpenPanel(p => ShowMediaPanel = p, "diaphane://media");
+    }
+    [RelayCommand] public void CloseMediaPanel()
+    {
+        ShowMediaPanel = false;
+        ClosePanel(true, "diaphane://media");
+    }
+
+    [RelayCommand] public void ToggleDevTools() => ActiveTab?.ToggleDevTools();
 
     [RelayCommand(CanExecute = nameof(CanGoBack))] public void GoBack() => ActiveTab?.Back();
     [RelayCommand(CanExecute = nameof(CanGoForward))] public void GoForward() => ActiveTab?.Forward();

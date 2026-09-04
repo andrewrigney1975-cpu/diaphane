@@ -24,6 +24,7 @@ public sealed partial class PrivacyViewModel : ObservableObject
         _clearDnsCache    = d.HasFlag(ClearScope.DnsCache);
         _timeRangeIndex   = (int)service.Settings.DefaultTimeRange;
         _clearOnExit      = service.Settings.ClearOnExit != ClearScope.None;
+        _allowWidevine    = service.Settings.EnableWidevine;
         _lastResult       = "";
     }
 
@@ -37,8 +38,17 @@ public sealed partial class PrivacyViewModel : ObservableObject
     [ObservableProperty] private bool _clearDnsCache;
     [ObservableProperty] private int _timeRangeIndex;
     [ObservableProperty] private bool _clearOnExit;
+    [ObservableProperty] private bool _allowWidevine;
     [ObservableProperty] private bool _busy;
     [ObservableProperty] private string _lastResult;
+
+    partial void OnAllowWidevineChanged(bool value)
+    {
+        _service.SetAllowWidevine(value);
+        LastResult = value
+            ? "Widevine will be permitted after you restart diaphane. diaphane still never downloads the DRM module."
+            : "Widevine will be blocked after you restart diaphane.";
+    }
 
     private ClearScope Scope =>
         (ClearCookies     ? ClearScope.Cookies     : 0) |

@@ -19,7 +19,7 @@ Full design: **[Architecture & Roadmap](https://claude.ai/code/artifact/7760756e
 
 ## Build & test now
 ```
-dotnet test tests/Diaphane.Shell.Tests   # 30 tests, runs against FakeEngine
+dotnet test tests/Diaphane.Shell.Tests   # 35 tests, runs against FakeEngine
 dotnet build src/Diaphane.Privacy
 ```
 
@@ -29,5 +29,6 @@ checkout is only needed to produce `Diaphane.Core`'s native payload — see `eng
 ## Milestones
 ✅ M1 engine pipeline · M2 core bridge · M3 single-tab shell · M4 tabs · M5 bookmarks+history+omnibox
 · M6 sandbox tabs · M7 privacy dashboard + clear-data · M8 extensions (management + startup load)
+· M9 DevTools + codecs + Widevine opt-in
 
-Next: M9 codecs+Widevine opt-in · M10 settings, packaging, self-update.
+Next: M10 settings, packaging, self-update.

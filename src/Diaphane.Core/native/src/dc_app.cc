@@ -1,6 +1,7 @@
 #include "src/dc_app.h"
 
 #include <string>
+#include <vector>
 
 #include "include/cef_command_line.h"
 
@@ -8,15 +9,20 @@ void DcApp::OnBeforeCommandLineProcessing(const CefString& process_type,
                                           CefRefPtr<CefCommandLine> command_line) {
   // Belt-and-braces privacy hardening on top of the ungoogled patch set + GN flags.
   if (process_type.empty()) {
-    const char* kDisableFeatures[] = {
+    std::vector<const char*> disable_features = {
         "OptimizationHints", "MediaRouter", "AutofillServerCommunication",
         "InterestFeedContentSuggestions", "Translate",
         "SafeBrowsingEnhancedProtection",
     };
+    if (!widevine_allowed_) {
+      // Off by default: don't let the CDM load and never register it for the
+      // component updater (which is already disabled, but be explicit).
+      disable_features.push_back("WidevineCdm");
+    }
     std::string disabled;
     if (command_line->HasSwitch("disable-features"))
       disabled = command_line->GetSwitchValue("disable-features").ToString();
-    for (const char* f : kDisableFeatures) {
+    for (const char* f : disable_features) {
       if (!disabled.empty()) disabled += ",";
       disabled += f;
     }

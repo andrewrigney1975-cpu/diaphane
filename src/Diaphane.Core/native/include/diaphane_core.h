@@ -59,6 +59,7 @@ typedef struct dc_settings {
   int32_t     windowless;        // 1 = off-screen rendering (headless), 0 = windowed
   int32_t     no_sandbox;        // 1 = disable the CEF sandbox (tests only)
   const char* extension_dirs;    // optional; ';'-separated unpacked-extension dirs to --load-extension
+  int32_t     allow_widevine;    // 1 = permit the Widevine CDM if present; 0 (default) hardens it off
 } dc_settings;
 
 // ---- lifecycle ----
@@ -109,6 +110,21 @@ DC_API void dc_view_key(const char* view_id, int32_t is_down, int32_t windows_ke
                         int32_t native_key_code, uint32_t modifiers, uint16_t character);
 // Force a full repaint (OSR) — call when a hidden tab becomes visible again.
 DC_API void dc_view_invalidate(const char* view_id);
+
+// ---- devtools ----
+// Opens DevTools in its own top-level window. element_x/element_y in view px,
+// or (0,0) for no "inspect element" target.
+DC_API void    dc_view_show_devtools(const char* view_id, int32_t element_x, int32_t element_y);
+DC_API void    dc_view_close_devtools(const char* view_id);
+DC_API int32_t dc_view_has_devtools(const char* view_id);
+
+// ---- script evaluation (via the DevTools protocol Runtime.evaluate) ----
+// The result JSON (the CDP "result" object, or an error) is delivered to |cb|
+// tagged with the returned request id. Returns 0 on failure.
+typedef void (*dc_eval_cb)(const char* view_id, int32_t request_id,
+                           int32_t ok, const char* result_json, void* user);
+DC_API int32_t dc_view_eval_js(const char* view_id, const char* script,
+                               dc_eval_cb cb, void* user);
 
 // ---- diagnostics ----
 DC_API const char* dc_version(void);   // "CEF x.y.z / Chromium a.b.c.d"

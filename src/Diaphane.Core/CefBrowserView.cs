@@ -15,6 +15,8 @@ internal sealed class CefBrowserView : IOffscreenBrowserView
     private readonly ViewLifecycleCb _createdCb;
     private readonly ViewLifecycleCb _closedCb;
     private readonly PaintCb _paintCb;
+    private readonly EvalCb _evalCb;
+    private readonly Dictionary<int, TaskCompletionSource<string>> _pendingEvals = new();
 
     private NavigationState _state = new("about:blank", "", true, false, false, 0);
     private bool _disposed;
@@ -59,6 +61,13 @@ internal sealed class CefBrowserView : IOffscreenBrowserView
         };
         _createdCb = (_, _) => { };
         _closedCb = (_, _) => Closed?.Invoke(this, EventArgs.Empty);
+        _evalCb = (_, requestId, ok, resultJson, _) =>
+        {
+            if (!_pendingEvals.Remove(requestId, out var tcs)) return;
+            if (ok != 0) tcs.TrySetResult(resultJson);
+            else tcs.TrySetException(new InvalidOperationException(
+                $"Script evaluation failed: {resultJson}"));
+        };
         _paintCb = (_, bgra, w, h, dx, dy, dw, dh, _) =>
             FramePainted?.Invoke(this, new FramePaint(bgra, w, h, dx, dy, dw, dh));
 
@@ -88,6 +97,21 @@ internal sealed class CefBrowserView : IOffscreenBrowserView
     public void SetBounds(int x, int y, int width, int height) => dc_view_set_bounds(NativeId, x, y, width, height);
     public void SetVisible(bool visible) => dc_view_set_visible(NativeId, visible ? 1 : 0);
     public void SetFocus(bool focused) => dc_view_set_focus(NativeId, focused ? 1 : 0);
+
+    public void ShowDevTools() => dc_view_show_devtools(NativeId, 0, 0);
+    public void CloseDevTools() => dc_view_close_devtools(NativeId);
+    public bool HasDevTools => dc_view_has_devtools(NativeId) != 0;
+
+    public Task<string> EvaluateJavaScriptAsync(string script)
+    {
+        var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var id = dc_view_eval_js(NativeId, script, _evalCb, IntPtr.Zero);
+        if (id == 0)
+            tcs.TrySetException(new InvalidOperationException("The view has no live browser."));
+        else
+            _pendingEvals[id] = tcs;
+        return tcs.Task;
+    }
 
     public void ResizeSurface(int width, int height) => dc_view_osr_size(NativeId, width, height);
     public void Invalidate() => dc_view_invalidate(NativeId);

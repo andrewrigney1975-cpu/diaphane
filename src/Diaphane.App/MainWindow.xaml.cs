@@ -44,7 +44,9 @@ public sealed partial class MainWindow : Window
         Directory.CreateDirectory(dataDir);
 
         _extensions = new ExtensionStore(Path.Combine(dataDir, "extensions.db"));
-        _cef = new CefHost(DispatcherQueue, CefHost.ResolveNativeBinDir(), _extensions.EnabledPaths());
+        var privacySettings = new Diaphane.Privacy.PrivacySettingsStore(Path.Combine(dataDir, "privacy.json")).Load();
+        _cef = new CefHost(DispatcherQueue, CefHost.ResolveNativeBinDir(),
+            _extensions.EnabledPaths(), allowWidevine: privacySettings.EnableWidevine);
         Vm = new ShellViewModel(_cef.Engine, dataDir, _extensions);
         Vm.PropertyChanged += OnVmPropertyChanged;
         Vm.Tabs.CollectionChanged += (_, _) => SyncTabStrip();
@@ -119,6 +121,9 @@ public sealed partial class MainWindow : Window
         Add(VirtualKey.N, CtrlShift, () => Vm.NewSandboxTabCommand.Execute(null));
         Add(VirtualKey.Delete, CtrlShift, () => Vm.TogglePrivacyPanelCommand.Execute(null));
         Add(VirtualKey.E, CtrlShift, () => Vm.ToggleExtensionsPanelCommand.Execute(null));
+        Add(VirtualKey.I, CtrlShift, () => Vm.ToggleDevToolsCommand.Execute(null));
+        Add(VirtualKey.F12, VirtualKeyModifiers.None, () => Vm.ToggleDevToolsCommand.Execute(null));
+        Add(VirtualKey.M, CtrlShift, () => Vm.ToggleMediaPanelCommand.Execute(null));
     }
 
     // ---- diaphane://extensions ----

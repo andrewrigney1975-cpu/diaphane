@@ -14,6 +14,7 @@
 #include "include/cef_browser.h"
 #include "include/cef_cookie.h"
 #include "include/cef_request_context.h"
+#include "include/cef_values.h"
 #include "include/cef_version.h"
 #include "include/wrapper/cef_helpers.h"
 
@@ -102,6 +103,7 @@ int32_t dc_initialize(const dc_settings* s,
     g_app->SetUserDataDir(CefString(s->root_cache_dir));
   if (s->extension_dirs && *s->extension_dirs)
     g_app->SetExtensionDirs(s->extension_dirs);
+  g_app->SetWidevineAllowed(s->allow_widevine != 0);
 
   // Even in the browser process CEF wants this called first (early init). It
   // returns >= 0 only when this process is actually a sub-process, which it
@@ -409,6 +411,53 @@ void dc_view_key(const char* view_id, int32_t is_down, int32_t windows_key_code,
   }
   ke.type = is_down ? KEYEVENT_RAWKEYDOWN : KEYEVENT_KEYUP;
   b->GetHost()->SendKeyEvent(ke);
+}
+
+namespace {
+// DevTools opens in its own top-level window; it needs a client but we don't
+// care about its events. One shared empty client is enough.
+class DcDevToolsClient : public CefClient {
+  IMPLEMENT_REFCOUNTING(DcDevToolsClient);
+};
+CefRefPtr<CefClient> g_devtools_client;
+}  // namespace
+
+void dc_view_show_devtools(const char* view_id, int32_t x, int32_t y) {
+  auto c = LookupView(view_id);
+  auto b = c ? c->browser() : nullptr;
+  if (!b) return;
+  if (!g_devtools_client) g_devtools_client = new DcDevToolsClient();
+
+  CefWindowInfo wi;
+#if defined(_WIN32)
+  wi.SetAsPopup(nullptr, "DevTools — diaphane");
+#endif
+  CefBrowserSettings settings;
+  b->GetHost()->ShowDevTools(wi, g_devtools_client, settings, CefPoint(x, y));
+}
+
+void dc_view_close_devtools(const char* view_id) {
+  if (auto b = LookupBrowser(view_id)) b->GetHost()->CloseDevTools();
+}
+
+int32_t dc_view_has_devtools(const char* view_id) {
+  auto b = LookupBrowser(view_id);
+  return b && b->GetHost()->HasDevTools() ? 1 : 0;
+}
+
+int32_t dc_view_eval_js(const char* view_id, const char* script,
+                        dc_eval_cb cb, void* user) {
+  auto c = LookupView(view_id);
+  auto b = c ? c->browser() : nullptr;
+  if (!b || !script || !cb) return 0;
+
+  c->EnsureEvalObserver(cb, user);
+
+  auto params = CefDictionaryValue::Create();
+  params->SetString("expression", CefString(script));
+  params->SetBool("returnByValue", true);
+  params->SetBool("awaitPromise", true);
+  return b->GetHost()->ExecuteDevToolsMethod(0, "Runtime.evaluate", params);
 }
 
 void dc_view_invalidate(const char* view_id) {

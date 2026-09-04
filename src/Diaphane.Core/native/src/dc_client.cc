@@ -4,11 +4,50 @@
 #include <windows.h>
 #endif
 
+#include <string>
+
 #include "include/cef_browser.h"
 #include "include/cef_frame.h"
 
+namespace {
+
+// Bridges CefDevToolsMessageObserver -> the C dc_eval_cb. Separate class so
+// DcClient doesn't multiply-inherit two CefBaseRefCounted interfaces.
+class DcEvalObserver : public CefDevToolsMessageObserver {
+ public:
+  explicit DcEvalObserver(std::string view_id) : view_id_(std::move(view_id)) {}
+  void set_callback(dc_eval_cb cb, void* user) { cb_ = cb; user_ = user; }
+
+  void OnDevToolsMethodResult(CefRefPtr<CefBrowser> browser, int message_id,
+                              bool success, const void* result,
+                              size_t result_size) override {
+    if (!cb_) return;
+    std::string json(static_cast<const char*>(result), result_size);
+    cb_(view_id_.c_str(), message_id, success ? 1 : 0, json.c_str(), user_);
+  }
+
+ private:
+  std::string view_id_;
+  dc_eval_cb cb_ = nullptr;
+  void* user_ = nullptr;
+  IMPLEMENT_REFCOUNTING(DcEvalObserver);
+  DISALLOW_COPY_AND_ASSIGN(DcEvalObserver);
+};
+
+}  // namespace
+
 DcClient::DcClient(std::string view_id, dc_view_callbacks cb, int width, int height)
     : view_id_(std::move(view_id)), cb_(cb), width_(width), height_(height) {}
+
+void DcClient::EnsureEvalObserver(dc_eval_cb cb, void* user) {
+  if (!browser_) return;
+  if (!eval_observer_) {
+    auto obs = new DcEvalObserver(view_id_);
+    eval_observer_ = obs;
+    devtools_reg_ = browser_->GetHost()->AddDevToolsMessageObserver(eval_observer_);
+  }
+  static_cast<DcEvalObserver*>(eval_observer_.get())->set_callback(cb, user);
+}
 
 void DcClient::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
   browser_ = browser;

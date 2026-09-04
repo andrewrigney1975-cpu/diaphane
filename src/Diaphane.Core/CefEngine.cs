@@ -12,7 +12,8 @@ public sealed record CefEngineOptions(
     bool Windowless = false,
     bool NoSandbox = false,
     string? UserAgent = null,
-    IReadOnlyList<string>? ExtensionDirs = null);
+    IReadOnlyList<string>? ExtensionDirs = null,
+    bool AllowWidevine = false);
 
 /// <summary>
 /// The real <see cref="IBrowserEngine"/> — a thin managed shell over DiaphaneCore.dll.
@@ -40,6 +41,7 @@ public sealed class CefEngine : IBrowserEngine, IDisposable
             Windowless = o.Windowless ? 1 : 0,
             NoSandbox = o.NoSandbox ? 1 : 0,
             ExtensionDirs = o.ExtensionDirs is { Count: > 0 } dirs ? string.Join(';', dirs) : null,
+            AllowWidevine = o.AllowWidevine ? 1 : 0,
         };
 
         if (dc_initialize(settings, _pumpCb, IntPtr.Zero) == 0)

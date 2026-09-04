@@ -21,6 +21,7 @@ class DcApp : public CefApp,
   }
   void SetUserDataDir(const CefString& dir) { user_data_dir_ = dir; }
   void SetExtensionDirs(const std::string& semi_list) { extension_dirs_ = semi_list; }
+  void SetWidevineAllowed(bool allowed) { widevine_allowed_ = allowed; }
   bool context_initialized() const { return context_initialized_; }
 
   // CefApp
@@ -38,6 +39,7 @@ class DcApp : public CefApp,
   bool context_initialized_ = false;
   CefString user_data_dir_;
   std::string extension_dirs_;   // ';'-separated; becomes --load-extension
+  bool widevine_allowed_ = false;
 
   IMPLEMENT_REFCOUNTING(DcApp);
   DISALLOW_COPY_AND_ASSIGN(DcApp);

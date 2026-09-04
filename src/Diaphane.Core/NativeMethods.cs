@@ -59,6 +59,7 @@ internal static partial class NativeMethods
         public int Windowless;
         public int NoSandbox;
         [MarshalAs(UnmanagedType.LPUTF8Str)] public string? ExtensionDirs;
+        public int AllowWidevine;
     }
 
     // Structs with string / delegate fields aren't supported by [LibraryImport] source-gen;
@@ -133,6 +134,25 @@ internal static partial class NativeMethods
     internal static partial void dc_view_key(string viewId, int isDown, int windowsKeyCode, int nativeKeyCode, uint modifiers, ushort character);
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void dc_view_invalidate(string viewId);
+
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dc_view_show_devtools(string viewId, int elementX, int elementY);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dc_view_close_devtools(string viewId);
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int dc_view_has_devtools(string viewId);
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void EvalCb(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string viewId, int requestId, int ok,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string resultJson, IntPtr user);
+
+    // delegate parameter -> classic marshaller
+    [DllImport(Dll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+    internal static extern int dc_view_eval_js(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string viewId,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string script,
+        EvalCb cb, IntPtr user);
 
     [LibraryImport(Dll)]
     internal static partial IntPtr dc_version();

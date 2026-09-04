@@ -40,6 +40,12 @@ public sealed class PrivacyService
         _store.Save(Settings);
     }
 
+    public void SetAllowWidevine(bool allow)
+    {
+        Settings.EnableWidevine = allow;
+        _store.Save(Settings);
+    }
+
     public void SaveDefaults(ClearScope scope, ClearTimeRange range)
     {
         Settings.DefaultClearScope = scope;

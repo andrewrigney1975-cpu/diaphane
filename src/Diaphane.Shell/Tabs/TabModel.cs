@@ -46,6 +46,14 @@ public sealed class TabModel : INotifyPropertyChanged
     public void Back() => _view.GoBack();
     public void Forward() => _view.GoForward();
     public void SetBounds(int x, int y, int width, int height) => _view.SetBounds(x, y, width, height);
+
+    public void ToggleDevTools()
+    {
+        if (_view.HasDevTools) _view.CloseDevTools();
+        else _view.ShowDevTools();
+    }
+
+    public Task<string> EvaluateJavaScriptAsync(string script) => _view.EvaluateJavaScriptAsync(script);
     internal IBrowserView View => _view;
 
     /// <summary>Non-null when the engine renders off-screen (the shell owns the surface).</summary>

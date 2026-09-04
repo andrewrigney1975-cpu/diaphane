@@ -65,6 +65,17 @@ public interface IBrowserView : IDisposable
     void SetVisible(bool visible);
     void SetFocus(bool focused);
 
+    /// <summary>Open/close DevTools in its own top-level window.</summary>
+    void ShowDevTools();
+    void CloseDevTools();
+    bool HasDevTools { get; }
+
+    /// <summary>
+    /// Evaluate <paramref name="script"/> in the page and return the JSON-serialised
+    /// result (CDP Runtime.evaluate). Rejects if evaluation errors.
+    /// </summary>
+    Task<string> EvaluateJavaScriptAsync(string script);
+
     event EventHandler<NavigationState>? NavigationStateChanged;
     event EventHandler<string>? TitleChanged;
     event EventHandler<string>? FaviconUrlChanged;
