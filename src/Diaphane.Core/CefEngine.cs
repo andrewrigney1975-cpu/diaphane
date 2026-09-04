@@ -57,6 +57,15 @@ public sealed class CefEngine : IBrowserEngine, IDisposable
 
     public void DoMessageLoopWork() => dc_pump();
 
+    /// <summary>Override where new downloads land (null/empty = the engine's own default,
+    /// typically the OS Downloads folder). Additive native surface — a no-op on an engine
+    /// build that predates download support.</summary>
+    public void SetDefaultDownloadDirectory(string? dir)
+    {
+        try { dc_set_default_download_dir(string.IsNullOrWhiteSpace(dir) ? null : dir); }
+        catch (EntryPointNotFoundException) { /* downloads aren't tracked on this engine build */ }
+    }
+
     public IRequestContext StandardContext =>
         _standard ??= new CefRequestContext(PtrToUtf8(dc_context_standard()), persistent: true, owned: false);
 

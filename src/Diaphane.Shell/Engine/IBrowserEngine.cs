@@ -74,9 +74,23 @@ public interface IBrowserView : IDisposable
     event EventHandler<NavigationState>? NavigationStateChanged;
     event EventHandler<string>? TitleChanged;
     event EventHandler<string>? FaviconUrlChanged;
+
+    /// <summary>
+    /// Raised as a browser-initiated download progresses. Requires an engine build with
+    /// download support (CefDownloadHandler wired up natively) — a build without it never
+    /// raises this event, and the shell degrades to "downloads aren't tracked" rather than
+    /// failing.
+    /// </summary>
+    event EventHandler<DownloadProgress>? DownloadUpdated;
 }
 
 public sealed record NavigationState(string Url, string Title, bool IsLoading, bool CanGoBack, bool CanGoForward, double Progress);
+
+public enum DownloadState { InProgress, Complete, Cancelled, Interrupted }
+
+public sealed record DownloadProgress(
+    long NativeId, string Url, string FileName, string FilePath,
+    long ReceivedBytes, long TotalBytes, DownloadState State);
 
 /// <summary>Off-screen-rendered browser: the shell owns the surface and forwards input.</summary>
 public interface IOffscreenBrowserView : IBrowserView

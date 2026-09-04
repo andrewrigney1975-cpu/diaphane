@@ -54,9 +54,11 @@ public sealed partial class MainWindow : Window
         Vm.Tabs.CollectionChanged += (_, _) => SyncTabStrip();
         ((Windows.Foundation.Collections.IObservableVector<object>)TabStrip.TabItems).VectorChanged += OnTabItemsReordered;
         Vm.SettingsChanged += ApplyTheme;
+        Vm.SettingsChanged += () => _cef.Engine.SetDefaultDownloadDirectory(Vm.Settings.DownloadDirectory);
         Vm.Settings.EngineVersion = $"diaphane {Vm.Settings.Version}  ·  {_cef.Engine.Version}";
         ApplyTheme();
         RestoreWindowGeometry();
+        _cef.Engine.SetDefaultDownloadDirectory(Vm.Settings.DownloadDirectory);
 
         _page = new CefSurface(BrowserImage, BrowserFocus);
         _dev = new CefSurface(DevToolsImage, DevToolsFocus);
@@ -123,6 +125,32 @@ public sealed partial class MainWindow : Window
     public static Visibility VisIfText(string? s) => string.IsNullOrEmpty(s) ? Visibility.Collapsed : Visibility.Visible;
     public static bool Not(bool b) => !b;
 
+    // ---- x:Bind function helpers (downloads) ----
+    public static string DownloadStatus(Diaphane.Data.DownloadState state, long received, long total)
+    {
+        string Size(long bytes) => bytes switch
+        {
+            >= 1_073_741_824 => $"{bytes / 1_073_741_824.0:0.#} GB",
+            >= 1_048_576 => $"{bytes / 1_048_576.0:0.#} MB",
+            >= 1024 => $"{bytes / 1024.0:0.#} KB",
+            _ => $"{bytes} B",
+        };
+        return state switch
+        {
+            Diaphane.Data.DownloadState.InProgress => total > 0 ? $"{Size(received)} of {Size(total)}" : Size(received),
+            Diaphane.Data.DownloadState.Complete => Size(total > 0 ? total : received),
+            Diaphane.Data.DownloadState.Cancelled => "Cancelled",
+            Diaphane.Data.DownloadState.Interrupted => "Failed",
+            _ => "",
+        };
+    }
+
+    public static double DownloadPercent(long received, long total) =>
+        total > 0 ? Math.Clamp(received * 100.0 / total, 0, 100) : 0;
+
+    public static Visibility VisIfInProgress(Diaphane.Data.DownloadState state) =>
+        state == Diaphane.Data.DownloadState.InProgress ? Visibility.Visible : Visibility.Collapsed;
+
     private void ApplyTheme()
     {
         Root.RequestedTheme = Vm.Theme switch
@@ -175,6 +203,7 @@ public sealed partial class MainWindow : Window
         Add(VirtualKey.I, CtrlShift, () => Vm.ToggleDevToolsCommand.Execute(null));
         Add(VirtualKey.F12, VirtualKeyModifiers.None, () => Vm.ToggleDevToolsCommand.Execute(null));
         Add(VirtualKey.M, CtrlShift, () => Vm.ToggleMediaPanelCommand.Execute(null));
+        Add(VirtualKey.J, Ctrl, () => Vm.ToggleDownloadsPanelCommand.Execute(null));
     }
 
     // ---- diaphane://extensions ----
@@ -194,6 +223,19 @@ public sealed partial class MainWindow : Window
     {
         if ((sender as FrameworkElement)?.Tag is Browser.ExtensionRow row)
             Vm.Extensions.RemoveCommand.Execute(row);
+    }
+
+    // ---- diaphane://settings — downloads location ----
+    private async void OnBrowseDownloadDirectoryClick(object sender, RoutedEventArgs e)
+    {
+        var picker = new Windows.Storage.Pickers.FolderPicker { SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.Downloads };
+        picker.FileTypeFilter.Add("*");
+        WinRT.Interop.InitializeWithWindow.Initialize(picker,
+            WinRT.Interop.WindowNative.GetWindowHandle(this));
+
+        var folder = await picker.PickSingleFolderAsync();
+        if (folder is not null)
+            Vm.Settings.DownloadDirectory = folder.Path;
     }
 
     // Diagnostic: RenderTargetBitmap captures the live XAML visual tree (incl. the
@@ -281,6 +323,9 @@ public sealed partial class MainWindow : Window
             case nameof(ShellViewModel.ShowDevTools):
                 UpdateDevToolsPane();
                 break;
+            case nameof(ShellViewModel.ShowDownloadsPanel):
+                UpdateDownloadsPane();
+                break;
             case nameof(ShellViewModel.ShowBookmarksBar):
                 UpdateBookmarksPanel();
                 break;
@@ -321,6 +366,25 @@ public sealed partial class MainWindow : Window
         {
             _dev.Attach(null);
             Vm.ActiveTab?.CloseDevTools();
+            // Downloads shares this column — only collapse it if that's closed too.
+            if (!Vm.ShowDownloadsPanel)
+            {
+                DevToolsSplitter.Visibility = Visibility.Collapsed;
+                DevToolsColumn.Width = new GridLength(0);
+            }
+        }
+    }
+
+    private void UpdateDownloadsPane()
+    {
+        if (Vm.ShowDownloadsPanel)
+        {
+            if (DevToolsColumn.Width.Value < 1)
+                DevToolsColumn.Width = new GridLength(Vm.SavedDevToolsPanelWidth >= 1 ? Vm.SavedDevToolsPanelWidth : 320);
+            DevToolsSplitter.Visibility = Visibility.Visible;
+        }
+        else if (!Vm.ShowDevTools)
+        {
             DevToolsSplitter.Visibility = Visibility.Collapsed;
             DevToolsColumn.Width = new GridLength(0);
         }
@@ -334,6 +398,13 @@ public sealed partial class MainWindow : Window
     {
         if (e.ClickedItem is Diaphane.Data.VisitEntry v)
             Vm.NavigateCommand.Execute(v.Url);
+    }
+
+    // ---- downloads panel ----
+    private void OnRemoveDownloadClick(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is DownloadEntry d)
+            Vm.RemoveDownloadCommand.Execute(d);
     }
 
     // ---- bookmarks panel ----
@@ -350,10 +421,17 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void BookmarksTree_ItemInvoked(TreeView sender, TreeViewItemInvokedEventArgs args)
+    // The row Grid has CanDrag="True", which suppresses TreeView.ItemInvoked on a tap
+    // (same WinUI quirk Dispatch's folder tree works around). Tapped still fires for a
+    // clean tap, so that's the real bookmark-click handler; a folder row's own chevron
+    // still expands/collapses it via the TreeView's built-in behavior.
+    private void BookmarkRow_Tapped(object sender, TappedRoutedEventArgs e)
     {
-        if (args.InvokedItem is BookmarkNode { IsFolder: false } node)
+        if ((sender as FrameworkElement)?.DataContext is BookmarkNode { IsFolder: false } node)
+        {
+            e.Handled = true;
             Vm.OpenBookmarkCommand.Execute(node.Model);
+        }
     }
 
     private void BookmarksTree_RightTapped(object sender, RightTappedRoutedEventArgs e)

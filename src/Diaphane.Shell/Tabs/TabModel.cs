@@ -32,6 +32,13 @@ public sealed class TabModel : INotifyPropertyChanged
     public Guid ContextId { get; }
     public bool IsSandbox => Kind == TabKind.Sandbox;
 
+    /// <summary>Forwarded from the underlying view — see <see cref="IBrowserView.DownloadUpdated"/>.</summary>
+    public event EventHandler<DownloadProgress>? DownloadUpdated
+    {
+        add => _view.DownloadUpdated += value;
+        remove => _view.DownloadUpdated -= value;
+    }
+
     public string Title { get => _title; private set => Set(ref _title, value); }
     public string Url { get => _url; private set => Set(ref _url, value); }
     public bool IsLoading { get => _isLoading; private set => Set(ref _isLoading, value); }

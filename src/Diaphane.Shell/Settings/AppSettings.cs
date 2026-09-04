@@ -33,6 +33,10 @@ public sealed class AppSettings
     public double BookmarksPanelWidth { get; set; } = 260;
     public double DevToolsPanelWidth { get; set; }
 
+    /// <summary>Overrides where new downloads land. Empty = the engine's own default
+    /// (typically the OS Downloads folder).</summary>
+    public string DownloadDirectory { get; set; } = "";
+
     /// <summary>
     /// Optional URL of a JSON update manifest ({"version": "...", "url": "..."}).
     /// Empty = the update check is disabled. Only ever fetched on an explicit

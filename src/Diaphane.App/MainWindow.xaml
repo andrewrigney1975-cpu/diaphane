@@ -62,6 +62,12 @@
                                   AutomationProperties.Name="Bookmark" ToolTipService.ToolTip="Bookmark (Ctrl+D)">
                         <FontIcon Glyph="&#xE734;" FontSize="18" />
                     </ToggleButton>
+                    <ToggleButton Style="{StaticResource ActivityBarToggleButtonStyle}"
+                                  Command="{x:Bind Vm.ToggleDownloadsPanelCommand}"
+                                  IsChecked="{x:Bind Vm.ShowDownloadsPanel, Mode=OneWay}"
+                                  AutomationProperties.Name="Downloads" ToolTipService.ToolTip="Downloads (Ctrl+J)">
+                        <FontIcon Glyph="&#xE896;" FontSize="18" />
+                    </ToggleButton>
                     <Button Style="{StaticResource ActivityBarButtonStyle}"
                             AutomationProperties.Name="History" ToolTipService.ToolTip="History (Ctrl+H)">
                         <FontIcon Glyph="&#xE81C;" FontSize="18" />
@@ -157,7 +163,6 @@
 
             <TreeView Grid.Row="1" x:Name="BookmarksTree" Margin="4,0,4,4" SelectionMode="None"
                       ItemsSource="{x:Bind Vm.BookmarkTree, Mode=OneWay}"
-                      ItemInvoked="BookmarksTree_ItemInvoked"
                       RightTapped="BookmarksTree_RightTapped">
                 <TreeView.ItemTemplate>
                     <DataTemplate>
@@ -166,7 +171,7 @@
                                       HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
                             <Grid Background="Transparent" Padding="2,3" ColumnSpacing="8"
                                   CanDrag="True" DragStarting="BookmarkRow_DragStarting"
-                                  DropCompleted="BookmarkRow_DropCompleted"
+                                  DropCompleted="BookmarkRow_DropCompleted" Tapped="BookmarkRow_Tapped"
                                   AllowDrop="True" DragEnter="BookmarkRow_DragOver"
                                   DragOver="BookmarkRow_DragOver" Drop="BookmarkRow_Drop">
                                 <Grid.ColumnDefinitions>
@@ -273,7 +278,8 @@
                     PointerMoved="OnDevSplitterMoved"
                     PointerReleased="OnDevSplitterReleased" />
 
-            <Grid x:Name="DevToolsRegion" Grid.Column="2" SizeChanged="OnDevToolsRegionChanged">
+            <Grid x:Name="DevToolsRegion" Grid.Column="2" SizeChanged="OnDevToolsRegionChanged"
+                  Visibility="{x:Bind local:MainWindow.VisIf(Vm.ShowDevTools), Mode=OneWay}">
                 <ScrollViewer x:Name="DevToolsFocus" IsTabStop="True" UseSystemFocusVisuals="False"
                               HorizontalScrollMode="Disabled" VerticalScrollMode="Disabled"
                               HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden"
@@ -286,6 +292,51 @@
                            PointerMoved="OnDevPointerMoved" PointerPressed="OnDevPointerPressed"
                            PointerReleased="OnDevPointerReleased" PointerExited="OnDevPointerExited"
                            PointerWheelChanged="OnDevPointerWheel" />
+                </ScrollViewer>
+            </Grid>
+
+            <!-- Downloads: shares the right-hand pane with DevTools -->
+            <Grid Grid.Column="2" x:Name="DownloadsPanel"
+                  Background="{ThemeResource LayerFillColorDefaultBrush}"
+                  Visibility="{x:Bind local:MainWindow.VisIf(Vm.ShowDownloadsPanel), Mode=OneWay}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Grid Grid.Row="0" Padding="12,10,12,4">
+                    <TextBlock Text="Downloads" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <HyperlinkButton Content="Clear all" HorizontalAlignment="Right"
+                                     Command="{x:Bind Vm.ClearDownloadsCommand}" />
+                </Grid>
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                    <ItemsControl ItemsSource="{x:Bind Vm.Downloads, Mode=OneWay}" Padding="8,0,8,8">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="data:DownloadEntry">
+                                <Border Padding="10,8" Margin="0,0,0,6" CornerRadius="6"
+                                        Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                                    <Grid ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" Spacing="2">
+                                            <TextBlock Text="{x:Bind FileName}" TextTrimming="CharacterEllipsis" />
+                                            <TextBlock Text="{x:Bind local:MainWindow.DownloadStatus(State, ReceivedBytes, TotalBytes)}"
+                                                       FontSize="11" Opacity="0.6" TextTrimming="CharacterEllipsis" />
+                                            <ProgressBar Value="{x:Bind local:MainWindow.DownloadPercent(ReceivedBytes, TotalBytes)}"
+                                                         Minimum="0" Maximum="100" Height="3"
+                                                         Visibility="{x:Bind local:MainWindow.VisIfInProgress(State)}" />
+                                        </StackPanel>
+                                        <Button Grid.Column="1" Padding="4" Background="Transparent" BorderThickness="0"
+                                                VerticalAlignment="Top" ToolTipService.ToolTip="Remove"
+                                                Click="OnRemoveDownloadClick" Tag="{x:Bind}">
+                                            <FontIcon Glyph="&#xE711;" FontSize="12" />
+                                        </Button>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
                 </ScrollViewer>
             </Grid>
             </Grid>
@@ -537,6 +588,23 @@
                             <ComboBox Header="Appearance" HorizontalAlignment="Stretch"
                                       ItemsSource="{x:Bind Vm.Settings.Themes}"
                                       SelectedIndex="{x:Bind Vm.Settings.ThemeIndex, Mode=TwoWay}" />
+
+                            <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="Downloads" FontWeight="SemiBold" />
+                                <Grid ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Grid.Column="0" Header="Save files to"
+                                             PlaceholderText="Default (the OS Downloads folder)"
+                                             Text="{x:Bind Vm.Settings.DownloadDirectory, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
+                                    <Button Grid.Column="1" Content="Browse…" VerticalAlignment="Bottom"
+                                            Click="OnBrowseDownloadDirectoryClick" />
+                                </Grid>
+                            </StackPanel>
 
                             <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
 

@@ -151,6 +151,26 @@ internal static partial class NativeMethods
         [MarshalAs(UnmanagedType.LPUTF8Str)] string script,
         EvalCb cb, IntPtr user);
 
+    // ---- downloads ----
+    // Additive, optional surface: an engine build predating download support simply lacks these
+    // exports, and callers catch EntryPointNotFoundException and degrade to "not tracked" rather
+    // than fail. Deliberately NOT folded into ViewCallbacks/dc_view_create — extending that struct
+    // would silently corrupt the ABI against an engine build that doesn't know about the new fields.
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void DownloadCb(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string viewId, long downloadId,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string url,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string fileName,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string filePath,
+        long receivedBytes, long totalBytes, int state, IntPtr user);
+
+    [DllImport(Dll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+    internal static extern void dc_view_set_download_cb(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string viewId, DownloadCb cb, IntPtr user);
+
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dc_set_default_download_dir(string? dir);
+
     [LibraryImport(Dll)]
     internal static partial IntPtr dc_version();
 

@@ -6,9 +6,14 @@
 #include "include/cef_client.h"
 #include "include/cef_devtools_message_observer.h"
 #include "include/cef_dialog_handler.h"
+#include "include/cef_download_handler.h"
 #include "include/cef_jsdialog_handler.h"
 #include "include/cef_registration.h"
 #include "include/diaphane_core.h"
+
+// Implemented in diaphane_core.cc (owns dc_set_default_download_dir's state).
+// Empty means "no override — use the engine's own default".
+std::string DcDefaultDownloadDir();
 
 // One DcClient per browser view. Forwards the handful of CEF events the shell
 // cares about to the caller-supplied C callbacks, tagged with the view id.
@@ -18,6 +23,7 @@ class DcClient : public CefClient,
                  public CefDisplayHandler,
                  public CefJSDialogHandler,
                  public CefDialogHandler,
+                 public CefDownloadHandler,
                  public CefRenderHandler {
  public:
   DcClient(std::string view_id, dc_view_callbacks cb, int width, int height);
@@ -36,12 +42,18 @@ class DcClient : public CefClient,
   // half-closed browser (dangling raw_ptr).
   void ReleaseDevToolsObserver();
 
+  // Registered separately from dc_view_callbacks (which is set once at
+  // dc_view_create and never changes shape) so download support stays
+  // additive to the native ABI. Null clears it.
+  void SetDownloadCallback(dc_download_cb cb, void* user) { download_cb_ = cb; download_user_ = user; }
+
   // CefClient
   CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override { return this; }
   CefRefPtr<CefLoadHandler> GetLoadHandler() override { return this; }
   CefRefPtr<CefDisplayHandler> GetDisplayHandler() override { return this; }
   CefRefPtr<CefJSDialogHandler> GetJSDialogHandler() override { return this; }
   CefRefPtr<CefDialogHandler> GetDialogHandler() override { return this; }
+  CefRefPtr<CefDownloadHandler> GetDownloadHandler() override { return this; }
   CefRefPtr<CefRenderHandler> GetRenderHandler() override { return this; }
 
   // CefLifeSpanHandler
@@ -79,6 +91,15 @@ class DcClient : public CefClient,
                     const std::vector<CefString>& accept_descriptions,
                     CefRefPtr<CefFileDialogCallback> callback) override;
 
+  // CefDownloadHandler
+  void OnBeforeDownload(CefRefPtr<CefBrowser> browser,
+                        CefRefPtr<CefDownloadItem> download_item,
+                        const CefString& suggested_name,
+                        CefRefPtr<CefBeforeDownloadCallback> callback) override;
+  void OnDownloadUpdated(CefRefPtr<CefBrowser> browser,
+                         CefRefPtr<CefDownloadItem> download_item,
+                         CefRefPtr<CefDownloadItemCallback> callback) override;
+
   // CefRenderHandler (windowless / OSR)
   void GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rect) override;
   bool GetScreenInfo(CefRefPtr<CefBrowser> browser, CefScreenInfo& info) override;
@@ -105,6 +126,9 @@ class DcClient : public CefClient,
   CefRefPtr<CefRegistration> devtools_reg_;   // keeps the observer registered
   CefRect popup_rect_;                        // <select> etc. dropdown, when open
   bool popup_open_ = false;
+
+  dc_download_cb download_cb_ = nullptr;
+  void* download_user_ = nullptr;
 
   IMPLEMENT_REFCOUNTING(DcClient);
   DISALLOW_COPY_AND_ASSIGN(DcClient);

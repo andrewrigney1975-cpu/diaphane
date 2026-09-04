@@ -90,5 +90,6 @@ public sealed class FakeView : IOffscreenBrowserView
     public event EventHandler<NavigationState>? NavigationStateChanged;
     public event EventHandler<string>? TitleChanged { add { } remove { } }
     public event EventHandler<string>? FaviconUrlChanged { add { } remove { } }
+    public event EventHandler<DownloadProgress>? DownloadUpdated { add { } remove { } }
     public event EventHandler<FramePaint>? FramePainted { add { } remove { } }
 }

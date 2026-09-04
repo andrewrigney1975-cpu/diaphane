@@ -125,6 +125,21 @@ typedef void (*dc_eval_cb)(const char* view_id, int32_t request_id,
 DC_API int32_t dc_view_eval_js(const char* view_id, const char* script,
                                dc_eval_cb cb, void* user);
 
+// ---- downloads ----
+// state: 0=in-progress 1=complete 2=cancelled 3=interrupted. |download_id| is CEF's own id,
+// stable for the life of the download. Fired on every progress update (including the final one).
+typedef void (*dc_download_cb)(const char* view_id, int64_t download_id, const char* url,
+                               const char* file_name, const char* file_path,
+                               int64_t received_bytes, int64_t total_bytes, int32_t state, void* user);
+// Registers (or, passed null, clears) the download callback for one view. Separate from
+// dc_view_callbacks so a build predating download support just lacks this export — never
+// grow dc_view_callbacks itself for this, that would silently break the struct's ABI for
+// callers built against an older diaphane_core.h.
+DC_API void dc_view_set_download_cb(const char* view_id, dc_download_cb cb, void* user);
+// Overrides where new downloads land; null/empty restores the engine's own default
+// (typically the OS Downloads folder). Applies to downloads started after the call.
+DC_API void dc_set_default_download_dir(const char* dir);
+
 // ---- diagnostics ----
 DC_API const char* dc_version(void);   // "CEF x.y.z / Chromium a.b.c.d"
 

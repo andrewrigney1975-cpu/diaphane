@@ -18,6 +18,7 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     private readonly IBrowserEngine _engine;
     private readonly HistoryStore _history;
     private readonly BookmarkStore _bookmarks;
+    private readonly DownloadStore _downloads;
     private readonly SettingsStore _settingsStore;
     private readonly AppSettings _settings;
     private readonly SessionStore _session;
@@ -25,6 +26,7 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     private TabManager? _tabs;
     private Guid? _sandboxGroup;                 // one in-memory context per window
     private readonly Dictionary<TabModel, string> _lastRecorded = new();
+    private readonly Dictionary<long, long> _downloadRowByNativeId = new();
 
     [ObservableProperty] private TabModel? _activeTab;
     [ObservableProperty] private string _addressText = "";
@@ -36,6 +38,7 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _showMediaPanel;
     [ObservableProperty] private bool _showSettingsPanel;
     [ObservableProperty] private bool _showDevTools;
+    [ObservableProperty] private bool _showDownloadsPanel;
 
     /// <summary>Raised when a setting that the window must react to (theme) changes.</summary>
     public event Action? SettingsChanged;
@@ -45,6 +48,9 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
 
     /// <summary>Root-level bookmarks and groups, for the left bookmarks panel's TreeView.</summary>
     public ObservableCollection<BookmarkNode> BookmarkTree { get; } = new();
+
+    /// <summary>Most recent first. Never populated by Sandbox-tab downloads.</summary>
+    public ObservableCollection<DownloadEntry> Downloads { get; } = new();
 
     private readonly PrivacyService _privacyService;
     public PrivacyViewModel Privacy { get; }
@@ -61,6 +67,7 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
         Directory.CreateDirectory(dataDir);
         _history = new HistoryStore(Path.Combine(dataDir, "history.db"));
         _bookmarks = new BookmarkStore(Path.Combine(dataDir, "bookmarks.db"));
+        _downloads = new DownloadStore(Path.Combine(dataDir, "downloads.db"));
 
         _settingsStore = new SettingsStore(Path.Combine(dataDir, "settings.json"));
         _settings = _settingsStore.Load();
@@ -126,12 +133,15 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     {
         if (_tabs is not null) return;
         _tabs = new TabManager(_engine, hostHwnd);
-        _tabs.Tabs.CollectionChanged += (_, _) =>
+        _tabs.Tabs.CollectionChanged += (_, e) =>
         {
+            if (e.NewItems is not null)
+                foreach (TabModel t in e.NewItems) t.DownloadUpdated += (_, p) => OnDownloadUpdated(t, p);
             Tabs.Clear();
             foreach (var t in _tabs!.Tabs) Tabs.Add(t);
         };
         RefreshBookmarkTree();
+        RefreshDownloads();
         OpenStartupTabs();
     }
 
@@ -357,7 +367,20 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
         ClosePanel(true, "diaphane://settings");
     }
 
-    [RelayCommand] public void ToggleDevTools() => ShowDevTools = !ShowDevTools;
+    // DevTools and the Downloads panel share the right-hand pane — only one at a time.
+    [RelayCommand]
+    public void ToggleDevTools()
+    {
+        ShowDevTools = !ShowDevTools;
+        if (ShowDevTools) ShowDownloadsPanel = false;
+    }
+
+    [RelayCommand]
+    public void ToggleDownloadsPanel()
+    {
+        ShowDownloadsPanel = !ShowDownloadsPanel;
+        if (ShowDownloadsPanel) ShowDevTools = false;
+    }
 
     [RelayCommand(CanExecute = nameof(CanGoBack))] public void GoBack() => ActiveTab?.Back();
     [RelayCommand(CanExecute = nameof(CanGoForward))] public void GoForward() => ActiveTab?.Forward();
@@ -513,6 +536,46 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
         _lastRecorded.Clear();
     }
 
+    // ---- downloads ----
+    // Never persisted for Sandbox tabs — same "no disk trace" rule as history/favicons.
+    // The downloaded file itself still lands on disk (that's the point); only the
+    // record of it stays out of the store.
+    private void OnDownloadUpdated(TabModel tab, DownloadProgress p)
+    {
+        if (tab.IsSandbox) return;
+
+        var state = (Diaphane.Data.DownloadState)(int)p.State;
+        if (_downloadRowByNativeId.TryGetValue(p.NativeId, out var rowId))
+            _downloads.UpdateProgress(rowId, p.ReceivedBytes, p.TotalBytes, state);
+        else
+            _downloadRowByNativeId[p.NativeId] =
+                _downloads.Start(p.Url, p.FileName, p.FilePath, p.TotalBytes);
+
+        RefreshDownloads();
+    }
+
+    private void RefreshDownloads()
+    {
+        Downloads.Clear();
+        foreach (var d in _downloads.Recent()) Downloads.Add(d);
+    }
+
+    [RelayCommand]
+    public void RemoveDownload(DownloadEntry? d)
+    {
+        if (d is null) return;
+        _downloads.Remove(d.Id);
+        RefreshDownloads();
+    }
+
+    [RelayCommand]
+    public void ClearDownloads()
+    {
+        _downloads.Clear();
+        _downloadRowByNativeId.Clear();
+        RefreshDownloads();
+    }
+
     // ---- omnibox ----
     public IReadOnlyList<Suggestion> Suggest(string typed)
     {
@@ -533,5 +596,6 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
         _tabs?.Dispose();
         _history.Dispose();
         _bookmarks.Dispose();
+        _downloads.Dispose();
     }
 }

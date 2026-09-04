@@ -38,6 +38,7 @@ std::unordered_map<std::string, CefRefPtr<CefRequestContext>> g_contexts;
 std::unordered_map<std::string, CefRefPtr<DcClient>> g_views;
 std::unordered_map<std::string, HWND> g_view_hosts;   // intermediate Win32 host per view
 std::string g_version_str;
+std::string g_default_download_dir;   // empty = no override, use the engine's own default
 
 #if defined(_WIN32)
 // Chromium's windowed GPU compositor creates a GL child window of the browser
@@ -86,6 +87,8 @@ CefRefPtr<CefBrowser> LookupBrowser(const char* id) {
 }
 
 }  // namespace
+
+std::string DcDefaultDownloadDir() { return g_default_download_dir; }
 
 extern "C" {
 
@@ -447,6 +450,14 @@ int32_t dc_view_eval_js(const char* view_id, const char* script,
 void dc_view_invalidate(const char* view_id) {
   if (auto b = LookupBrowser(view_id))
     b->GetHost()->Invalidate(PET_VIEW);
+}
+
+void dc_view_set_download_cb(const char* view_id, dc_download_cb cb, void* user) {
+  if (auto c = LookupView(view_id)) c->SetDownloadCallback(cb, user);
+}
+
+void dc_set_default_download_dir(const char* dir) {
+  g_default_download_dir = dir ? dir : "";
 }
 
 const char* dc_version(void) {

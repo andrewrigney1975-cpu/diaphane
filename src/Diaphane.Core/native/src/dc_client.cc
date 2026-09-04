@@ -4,9 +4,11 @@
 #include <windows.h>
 #endif
 
+#include <cstdlib>
 #include <string>
 
 #include "include/cef_browser.h"
+#include "include/cef_download_item.h"
 #include "include/cef_frame.h"
 
 namespace {
@@ -132,6 +134,38 @@ bool DcClient::OnFileDialog(CefRefPtr<CefBrowser> browser, FileDialogMode mode,
                            CefRefPtr<CefFileDialogCallback> callback) {
   callback->Cancel();
   return true;
+}
+
+namespace {
+int32_t DownloadStateOf(CefRefPtr<CefDownloadItem> item) {
+  if (item->IsComplete()) return 1;
+  if (item->IsCanceled()) return 2;
+  if (item->IsInterrupted()) return 3;
+  return 0;  // in progress
+}
+}  // namespace
+
+void DcClient::OnBeforeDownload(CefRefPtr<CefBrowser> browser,
+                                CefRefPtr<CefDownloadItem> download_item,
+                                const CefString& suggested_name,
+                                CefRefPtr<CefBeforeDownloadCallback> callback) {
+  std::string dir = DcDefaultDownloadDir();
+  std::string name = suggested_name.ToString();
+  std::string path = dir.empty() ? name : dir + name;
+  // show_dialog=false: no native window to parent a Save As dialog to (OSR).
+  callback->Continue(path, /*show_dialog=*/false);
+}
+
+void DcClient::OnDownloadUpdated(CefRefPtr<CefBrowser> browser,
+                                 CefRefPtr<CefDownloadItem> download_item,
+                                 CefRefPtr<CefDownloadItemCallback> callback) {
+  if (!download_cb_ || !download_item->IsValid()) return;
+  std::string url = download_item->GetURL().ToString();
+  std::string name = download_item->GetSuggestedFileName().ToString();
+  std::string path = download_item->GetFullPath().ToString();
+  download_cb_(view_id_.c_str(), static_cast<int64_t>(download_item->GetId()), url.c_str(),
+              name.c_str(), path.c_str(), download_item->GetReceivedBytes(),
+              download_item->GetTotalBytes(), DownloadStateOf(download_item), download_user_);
 }
 
 void DcClient::GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rect) {

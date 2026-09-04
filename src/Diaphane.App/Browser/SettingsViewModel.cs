@@ -27,6 +27,7 @@ public sealed partial class SettingsViewModel : ObservableObject
         _themeIndex       = (int)_s.Theme;
         _searchEngineIndex = Math.Max(0, SearchEngineIds.IndexOf(_s.SearchEngineId));
         _customSearchUrl  = _s.CustomSearchUrl;
+        _downloadDirectory = _s.DownloadDirectory;
         _updateManifestUrl = _s.UpdateManifestUrl;
         _updateStatus     = "";
         _loading = false;
@@ -49,6 +50,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     [ObservableProperty] private int _themeIndex;
     [ObservableProperty] private int _searchEngineIndex;
     [ObservableProperty] private string _customSearchUrl;
+    [ObservableProperty] private string _downloadDirectory;
     [ObservableProperty] private string _updateManifestUrl;
     [ObservableProperty] private string _updateStatus;
     [ObservableProperty] private bool _checkingUpdate;
@@ -60,6 +62,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     partial void OnHomepageChanged(string value) { _s.Homepage = value?.Trim() ?? ""; Persist(); }
     partial void OnThemeIndexChanged(int value) { _s.Theme = (AppTheme)value; Persist(); _onChanged(); }
     partial void OnUpdateManifestUrlChanged(string value) { _s.UpdateManifestUrl = value?.Trim() ?? ""; Persist(); }
+    partial void OnDownloadDirectoryChanged(string value) { _s.DownloadDirectory = value?.Trim() ?? ""; Persist(); _onChanged(); }
 
     partial void OnSearchEngineIndexChanged(int value)
     {
