@@ -28,10 +28,17 @@ public sealed class FakeContext(bool persistent) : IRequestContext
     public bool Disposed { get; private set; }
     public IReadOnlyList<ExtensionInfo> Extensions => Array.Empty<ExtensionInfo>();
 
-    public Task ClearCookiesAsync(DateTimeOffset? since = null) => Task.CompletedTask;
-    public Task ClearStorageAsync(DateTimeOffset? since = null) => Task.CompletedTask;
-    public Task ClearHttpCacheAsync() => Task.CompletedTask;
-    public Task FlushDnsAsync() => Task.CompletedTask;
+    // recorded for privacy/clear-data tests
+    public int CookiesCleared { get; private set; }
+    public int StorageCleared { get; private set; }
+    public int HttpCacheCleared { get; private set; }
+    public int DnsFlushed { get; private set; }
+    public DateTimeOffset? LastSince { get; private set; }
+
+    public Task ClearCookiesAsync(DateTimeOffset? since = null) { CookiesCleared++; LastSince = since; return Task.CompletedTask; }
+    public Task ClearStorageAsync(DateTimeOffset? since = null) { StorageCleared++; LastSince = since; return Task.CompletedTask; }
+    public Task ClearHttpCacheAsync() { HttpCacheCleared++; return Task.CompletedTask; }
+    public Task FlushDnsAsync() { DnsFlushed++; return Task.CompletedTask; }
     public Task<ExtensionInfo> LoadExtensionAsync(string path) =>
         Task.FromResult(new ExtensionInfo("id", "x", "1", true, Array.Empty<string>()));
     public void Dispose() => Disposed = true;

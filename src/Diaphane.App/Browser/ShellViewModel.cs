@@ -3,6 +3,7 @@ using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Diaphane.Data;
+using Diaphane.Privacy;
 using Diaphane.Shell.Engine;
 using Diaphane.Shell.Omnibox;
 using Diaphane.Shell.Tabs;
@@ -26,9 +27,13 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _isLoading;
     [ObservableProperty] private bool _activeIsSandbox;
     [ObservableProperty] private bool _showBookmarksBar = true;
+    [ObservableProperty] private bool _showPrivacyPanel;
 
     public ObservableCollection<TabModel> Tabs { get; } = new();
     public ObservableCollection<Bookmark> BookmarksBar { get; } = new();
+
+    private readonly PrivacyService _privacyService;
+    public PrivacyViewModel Privacy { get; }
 
     public bool CanGoBack => ActiveTab?.CanGoBack ?? false;
     public bool CanGoForward => ActiveTab?.CanGoForward ?? false;
@@ -39,7 +44,15 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
         Directory.CreateDirectory(dataDir);
         _history = new HistoryStore(Path.Combine(dataDir, "history.db"));
         _bookmarks = new BookmarkStore(Path.Combine(dataDir, "bookmarks.db"));
+
+        _privacyService = new PrivacyService(
+            new DataClearer(engine.StandardContext, _history),
+            new PrivacySettingsStore(Path.Combine(dataDir, "privacy.json")));
+        Privacy = new PrivacyViewModel(_privacyService);
     }
+
+    /// <summary>Run the configured clear-on-exit wipe. Called from the window's Closed handler.</summary>
+    public Task RunClearOnExitAsync() => _privacyService.RunClearOnExitAsync();
 
     public void Start(nint hostHwnd)
     {
@@ -166,7 +179,34 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
         var text = input ?? AddressText;
         if (string.IsNullOrWhiteSpace(text) || ActiveTab is null) return;
         var intent = OmniboxParser.Parse(text);
+        if (intent.Kind == OmniboxIntentKind.InternalPage && TryOpenInternalPage(intent.Target))
+            return;
         ActiveTab.Navigate(intent.ToNavigationUrl(_search));
+    }
+
+    /// <summary>diaphane:// pages are shell UI, not web content. Returns false for unknown names.</summary>
+    private bool TryOpenInternalPage(string url)
+    {
+        var name = url["diaphane://".Length..].TrimEnd('/').ToLowerInvariant();
+        switch (name)
+        {
+            case "privacy":
+            case "settings":
+                ShowPrivacyPanel = true;
+                AddressText = "diaphane://privacy";
+                return true;
+            case "newtab":
+                return false; // handled as a real (blank) navigation
+            default:
+                return false;
+        }
+    }
+
+    [RelayCommand] public void TogglePrivacyPanel() => ShowPrivacyPanel = !ShowPrivacyPanel;
+    [RelayCommand] public void ClosePrivacyPanel()
+    {
+        ShowPrivacyPanel = false;
+        if (AddressText == "diaphane://privacy") AddressText = Presentable(ActiveTab?.Url ?? "");
     }
 
     [RelayCommand(CanExecute = nameof(CanGoBack))] public void GoBack() => ActiveTab?.Back();

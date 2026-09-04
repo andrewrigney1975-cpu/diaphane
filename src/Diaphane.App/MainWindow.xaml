@@ -39,6 +39,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
             <Button Grid.Column="0" Command="{x:Bind Vm.GoBackCommand}" ToolTipService.ToolTip="Back (Alt+Left)">
@@ -94,6 +95,9 @@
             <Button Grid.Column="7" Command="{x:Bind Vm.ToggleBookmarksBarCommand}" ToolTipService.ToolTip="Bookmarks bar (Ctrl+Shift+B)">
                 <FontIcon Glyph="&#xE8A4;" FontSize="14" />
             </Button>
+            <Button Grid.Column="8" Command="{x:Bind Vm.TogglePrivacyPanelCommand}" ToolTipService.ToolTip="Clear browsing data (Ctrl+Shift+Del)">
+                <FontIcon Glyph="&#xE72E;" FontSize="14" />
+            </Button>
         </Grid>
 
         <!-- bookmarks bar -->
@@ -138,5 +142,51 @@
         </Grid>
         <ProgressBar x:Name="LoadBar" Grid.Row="3" VerticalAlignment="Top" IsIndeterminate="True"
                      Visibility="Collapsed" />
+
+        <!-- diaphane://privacy — Clear browsing data -->
+        <Grid Grid.Row="3" Background="#99000000"
+              Visibility="{x:Bind local:MainWindow.VisIf(Vm.ShowPrivacyPanel), Mode=OneWay}">
+            <Border MaxWidth="460" Margin="24" Padding="24" VerticalAlignment="Top"
+                    HorizontalAlignment="Center"
+                    Background="{ThemeResource LayerFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                    CornerRadius="8">
+                <StackPanel Spacing="12">
+                    <TextBlock Text="Clear browsing data" FontSize="18" FontWeight="SemiBold" />
+
+                    <ComboBox Header="Time range" HorizontalAlignment="Stretch"
+                              ItemsSource="{x:Bind Vm.Privacy.TimeRanges}"
+                              SelectedIndex="{x:Bind Vm.Privacy.TimeRangeIndex, Mode=TwoWay}" />
+
+                    <CheckBox Content="Cookies and other site data"
+                              IsChecked="{x:Bind Vm.Privacy.ClearCookies, Mode=TwoWay}" />
+                    <CheckBox Content="Site storage (localStorage, IndexedDB)"
+                              IsChecked="{x:Bind Vm.Privacy.ClearSiteStorage, Mode=TwoWay}" />
+                    <CheckBox Content="Cached files and images"
+                              IsChecked="{x:Bind Vm.Privacy.ClearHttpCache, Mode=TwoWay}" />
+                    <CheckBox Content="Browsing history"
+                              IsChecked="{x:Bind Vm.Privacy.ClearHistory, Mode=TwoWay}" />
+                    <CheckBox Content="DNS cache and open connections"
+                              IsChecked="{x:Bind Vm.Privacy.ClearDnsCache, Mode=TwoWay}" />
+
+                    <TextBlock Text="{x:Bind Vm.Privacy.LastResult, Mode=OneWay}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               TextWrapping="Wrap"
+                               Visibility="{x:Bind local:MainWindow.VisIfText(Vm.Privacy.LastResult), Mode=OneWay}" />
+
+                    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                        <Button Content="Close" Command="{x:Bind Vm.ClosePrivacyPanelCommand}" />
+                        <Button Content="Clear now" Style="{ThemeResource AccentButtonStyle}"
+                                Command="{x:Bind Vm.Privacy.ClearNowCommand}"
+                                IsEnabled="{x:Bind local:MainWindow.Not(Vm.Privacy.Busy), Mode=OneWay}" />
+                    </StackPanel>
+
+                    <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" Margin="0,4" />
+
+                    <CheckBox Content="Clear cookies, cache, storage and history every time diaphane closes"
+                              IsChecked="{x:Bind Vm.Privacy.ClearOnExit, Mode=TwoWay}" />
+                </StackPanel>
+            </Border>
+        </Grid>
     </Grid>
 </Window>

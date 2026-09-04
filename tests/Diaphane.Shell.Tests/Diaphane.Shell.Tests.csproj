@@ -13,5 +13,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Diaphane.Shell\Diaphane.Shell.csproj" />
+    <ProjectReference Include="..\..\src\Diaphane.Privacy\Diaphane.Privacy.csproj" />
+    <ProjectReference Include="..\..\src\Diaphane.Data\Diaphane.Data.csproj" />
   </ItemGroup>
 </Project>

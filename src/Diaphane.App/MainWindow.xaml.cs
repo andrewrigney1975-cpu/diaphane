@@ -63,7 +63,12 @@ public sealed partial class MainWindow : Window
             if (Environment.GetEnvironmentVariable("DIAPHANE_SELFSHOT") is not null)
                 _ = SelfCaptureLoopAsync();
         };
-        Closed += (_, _) => { Vm.Dispose(); _cef.Dispose(); };
+        Closed += (_, _) =>
+        {
+            try { Vm.RunClearOnExitAsync().Wait(TimeSpan.FromSeconds(5)); } catch { /* best effort */ }
+            Vm.Dispose();
+            _cef.Dispose();
+        };
 
         InstallAccelerators();
     }
@@ -76,6 +81,8 @@ public sealed partial class MainWindow : Window
         : (Application.Current.Resources["TextFillColorPrimaryBrush"] as Brush ?? new SolidColorBrush(Colors.White));
 
     public static Visibility VisIf(bool b) => b ? Visibility.Visible : Visibility.Collapsed;
+    public static Visibility VisIfText(string? s) => string.IsNullOrEmpty(s) ? Visibility.Collapsed : Visibility.Visible;
+    public static bool Not(bool b) => !b;
 
     public static Brush ToolbarBrush(bool isSandbox) => isSandbox
         ? new SolidColorBrush(Color.FromArgb(0x33, 0x67, 0x3A, 0xB7))
@@ -105,6 +112,7 @@ public sealed partial class MainWindow : Window
         Add(VirtualKey.D, Ctrl, () => Vm.ToggleBookmarkCommand.Execute(null));
         Add(VirtualKey.B, CtrlShift, () => Vm.ToggleBookmarksBarCommand.Execute(null));
         Add(VirtualKey.N, CtrlShift, () => Vm.NewSandboxTabCommand.Execute(null));
+        Add(VirtualKey.Delete, CtrlShift, () => Vm.TogglePrivacyPanelCommand.Execute(null));
     }
 
     // Diagnostic: RenderTargetBitmap captures the live XAML visual tree (incl. the
