@@ -39,6 +39,13 @@ public sealed class TabModel : INotifyPropertyChanged
         remove => _view.DownloadUpdated -= value;
     }
 
+    /// <summary>Forwarded from the underlying view — see <see cref="IBrowserView.PopupRequested"/>.</summary>
+    public event EventHandler<string>? PopupRequested
+    {
+        add => _view.PopupRequested += value;
+        remove => _view.PopupRequested -= value;
+    }
+
     public string Title { get => _title; private set => Set(ref _title, value); }
     public string Url { get => _url; private set => Set(ref _url, value); }
     public bool IsLoading { get => _isLoading; private set => Set(ref _isLoading, value); }

@@ -480,6 +480,10 @@ void dc_set_default_download_dir(const char* dir) {
   g_default_download_dir = dir ? dir : "";
 }
 
+void dc_view_set_popup_cb(const char* view_id, dc_popup_cb cb, void* user) {
+  if (auto c = LookupView(view_id)) c->SetPopupCallback(cb, user);
+}
+
 const char* dc_version(void) {
   if (g_version_str.empty())
     g_version_str = std::string("CEF ") + CEF_VERSION;

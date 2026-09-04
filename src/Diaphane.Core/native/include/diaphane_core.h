@@ -140,6 +140,14 @@ DC_API void dc_view_set_download_cb(const char* view_id, dc_download_cb cb, void
 // (typically the OS Downloads folder). Applies to downloads started after the call.
 DC_API void dc_set_default_download_dir(const char* dir);
 
+// ---- popups ----
+// Fired when the page tries to open a new window/tab (target="_blank", window.open(), a
+// middle-click, etc). The native side always cancels the popup itself — there's no second
+// top-level window to host it in — so the shell is expected to open |target_url| in one of
+// its own tabs. Same additive-registration pattern as dc_view_set_download_cb.
+typedef void (*dc_popup_cb)(const char* view_id, const char* target_url, void* user);
+DC_API void dc_view_set_popup_cb(const char* view_id, dc_popup_cb cb, void* user);
+
 // ---- diagnostics ----
 DC_API const char* dc_version(void);   // "CEF x.y.z / Chromium a.b.c.d"
 

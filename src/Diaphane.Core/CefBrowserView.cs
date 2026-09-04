@@ -17,6 +17,7 @@ internal sealed class CefBrowserView : IOffscreenBrowserView
     private readonly PaintCb _paintCb;
     private readonly EvalCb _evalCb;
     private readonly DownloadCb _downloadCb;
+    private readonly PopupCb _popupCb;
     private readonly Dictionary<int, TaskCompletionSource<string>> _pendingEvals = new();
 
     private NavigationState _state = new("about:blank", "", true, false, false, 0);
@@ -34,6 +35,7 @@ internal sealed class CefBrowserView : IOffscreenBrowserView
     public event EventHandler<string>? TitleChanged;
     public event EventHandler<string>? FaviconUrlChanged;
     public event EventHandler<DownloadProgress>? DownloadUpdated;
+    public event EventHandler<string>? PopupRequested;
     public event EventHandler<FramePaint>? FramePainted;
 
     public CefBrowserView(string contextId, nint hostHwnd, int width = 1280, int height = 800)
@@ -47,6 +49,9 @@ internal sealed class CefBrowserView : IOffscreenBrowserView
         // Additive, optional: an engine build predating download support just lacks this export.
         try { dc_view_set_download_cb(NativeId, _downloadCb, IntPtr.Zero); }
         catch (EntryPointNotFoundException) { /* downloads aren't tracked on this engine build */ }
+
+        try { dc_view_set_popup_cb(NativeId, _popupCb, IntPtr.Zero); }
+        catch (EntryPointNotFoundException) { /* popups just get cancelled on this engine build */ }
     }
 
     /// <summary>Roots all the CEF callback delegates; leaves <see cref="NativeId"/> unset.</summary>
@@ -91,6 +96,7 @@ internal sealed class CefBrowserView : IOffscreenBrowserView
         _downloadCb = (_, downloadId, url, fileName, filePath, received, total, state, _) =>
             DownloadUpdated?.Invoke(this, new DownloadProgress(
                 downloadId, url, fileName, filePath, received, total, (DownloadState)state));
+        _popupCb = (_, targetUrl, _) => PopupRequested?.Invoke(this, targetUrl);
 
         _cb = new ViewCallbacks
         {
@@ -167,5 +173,6 @@ internal sealed class CefBrowserView : IOffscreenBrowserView
         dc_view_close(NativeId);
         GC.KeepAlive(_cb);
         GC.KeepAlive(_downloadCb);
+        GC.KeepAlive(_popupCb);
     }
 }

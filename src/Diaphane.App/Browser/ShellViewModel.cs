@@ -136,7 +136,11 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
         _tabs.Tabs.CollectionChanged += (_, e) =>
         {
             if (e.NewItems is not null)
-                foreach (TabModel t in e.NewItems) t.DownloadUpdated += (_, p) => OnDownloadUpdated(t, p);
+                foreach (TabModel t in e.NewItems)
+                {
+                    t.DownloadUpdated += (_, p) => OnDownloadUpdated(t, p);
+                    t.PopupRequested += (_, url) => OnPopupRequested(t, url);
+                }
             Tabs.Clear();
             foreach (var t in _tabs!.Tabs) Tabs.Add(t);
         };
@@ -558,6 +562,17 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     {
         Downloads.Clear();
         foreach (var d in _downloads.Recent()) Downloads.Add(d);
+    }
+
+    /// <summary>A page tried to open a new window/tab (target="_blank", window.open(), …).
+    /// The engine already cancelled the popup itself; open it as a real tab instead — a
+    /// Sandbox opener's popup stays in that same Sandbox context, never leaks to a standard tab.</summary>
+    private void OnPopupRequested(TabModel opener, string url)
+    {
+        if (string.IsNullOrWhiteSpace(url) || url == "about:blank") return;
+        ActiveTab = opener.IsSandbox
+            ? _tabs!.NewSandboxTab(group: opener.ContextId, url: url)
+            : _tabs!.NewStandardTab(url);
     }
 
     [RelayCommand]

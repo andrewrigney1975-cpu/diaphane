@@ -171,6 +171,17 @@ internal static partial class NativeMethods
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void dc_set_default_download_dir(string? dir);
 
+    // ---- popups ----
+    // Additive/optional, same rationale as the download surface above.
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void PopupCb(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string viewId,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string targetUrl, IntPtr user);
+
+    [DllImport(Dll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+    internal static extern void dc_view_set_popup_cb(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string viewId, PopupCb cb, IntPtr user);
+
     [LibraryImport(Dll)]
     internal static partial IntPtr dc_version();
 

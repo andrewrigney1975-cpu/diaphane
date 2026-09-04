@@ -82,6 +82,14 @@ public interface IBrowserView : IDisposable
     /// failing.
     /// </summary>
     event EventHandler<DownloadProgress>? DownloadUpdated;
+
+    /// <summary>
+    /// Raised (with the target URL) when the page tries to open a new window/tab — there's
+    /// no second top-level window to host a real popup in, so the engine always cancels it
+    /// and leaves opening it up to the shell. Requires an engine build with popup-routing
+    /// support; a build without it just cancels silently.
+    /// </summary>
+    event EventHandler<string>? PopupRequested;
 }
 
 public sealed record NavigationState(string Url, string Title, bool IsLoading, bool CanGoBack, bool CanGoForward, double Progress);

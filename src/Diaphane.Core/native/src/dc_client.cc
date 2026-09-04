@@ -65,8 +65,10 @@ bool DcClient::OnBeforePopup(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> 
                              CefBrowserSettings& settings,
                              CefRefPtr<CefDictionaryValue>& extra_info,
                              bool* no_javascript_access) {
-  // TODO(diaphane): route this into a new shell tab instead of dropping it —
-  // for now, cancelling is what stops a real, un-owned native window appearing.
+  // Always cancel — there's no second top-level window to host a real popup in.
+  // The shell opens target_url in one of its own tabs instead, if it's listening.
+  if (popup_cb_ && !target_url.empty())
+    popup_cb_(view_id_.c_str(), target_url.ToString().c_str(), popup_user_);
   return true;
 }
 

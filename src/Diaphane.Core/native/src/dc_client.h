@@ -46,6 +46,7 @@ class DcClient : public CefClient,
   // dc_view_create and never changes shape) so download support stays
   // additive to the native ABI. Null clears it.
   void SetDownloadCallback(dc_download_cb cb, void* user) { download_cb_ = cb; download_user_ = user; }
+  void SetPopupCallback(dc_popup_cb cb, void* user) { popup_cb_ = cb; popup_user_ = user; }
 
   // CefClient
   CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override { return this; }
@@ -143,6 +144,8 @@ class DcClient : public CefClient,
 
   dc_download_cb download_cb_ = nullptr;
   void* download_user_ = nullptr;
+  dc_popup_cb popup_cb_ = nullptr;
+  void* popup_user_ = nullptr;
 
   IMPLEMENT_REFCOUNTING(DcClient);
   DISALLOW_COPY_AND_ASSIGN(DcClient);
