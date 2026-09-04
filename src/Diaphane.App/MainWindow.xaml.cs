@@ -43,6 +43,8 @@ public sealed partial class MainWindow : Window
 
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
+        AppTitleBar.SizeChanged += (_, _) => UpdateTitleBarInset();
+        UpdateTitleBarInset();
 
         _extensions = new ExtensionStore(Path.Combine(dataDir, "extensions.db"));
         var privacySettings = new Diaphane.Privacy.PrivacySettingsStore(Path.Combine(dataDir, "privacy.json")).Load();
@@ -168,6 +170,22 @@ public sealed partial class MainWindow : Window
             Diaphane.Shell.Settings.AppTheme.Dark => ElementTheme.Dark,
             _ => ElementTheme.Default,
         };
+    }
+
+    /// <summary>Keeps a spacer column the width of the system caption buttons so the
+    /// right-pane toggle sits just left of minimise/maximise/close, same pattern as
+    /// Docket/Dispatch.</summary>
+    private void UpdateTitleBarInset()
+    {
+        try
+        {
+            var scale = AppTitleBar.XamlRoot?.RasterizationScale ?? 1.0;
+            TitleBarRightInset.Width = new GridLength(Math.Max(0, AppWindow.TitleBar.RightInset / scale));
+
+            var height = AppWindow.TitleBar.Height / scale;
+            if (height > 0) AppTitleBarRow.Height = new GridLength(height);
+        }
+        catch { /* best effort */ }
     }
 
     private void OnOpenUpdateDownload(object sender, RoutedEventArgs e)
@@ -429,12 +447,9 @@ public sealed partial class MainWindow : Window
 
     private async void UpdateDevToolsPane()
     {
+        UpdateRightPaneColumn();
         if (Vm.ShowDevTools && Vm.ActiveTab is { } tab)
         {
-            if (DevToolsColumn.Width.Value < 1)
-                DevToolsColumn.Width = new GridLength(
-                    Vm.SavedDevToolsPanelWidth >= 1 ? Vm.SavedDevToolsPanelWidth : Math.Max(360, Root.ActualWidth * 0.42));
-            DevToolsSplitter.Visibility = Visibility.Visible;
             Root.UpdateLayout();   // give the pane a real size before we ask CEF to render into it
 
             var scale = Root.XamlRoot?.RasterizationScale ?? 1.0;
@@ -453,28 +468,49 @@ public sealed partial class MainWindow : Window
         {
             _dev.Attach(null);
             Vm.ActiveTab?.CloseDevTools();
-            // Downloads shares this column — only collapse it if that's closed too.
-            if (!Vm.ShowDownloadsPanel)
-            {
-                DevToolsSplitter.Visibility = Visibility.Collapsed;
-                DevToolsColumn.Width = new GridLength(0);
-            }
         }
     }
 
-    private void UpdateDownloadsPane()
+    private void UpdateDownloadsPane() => UpdateRightPaneColumn();
+
+    // ---- right pane (DevTools / Downloads share one column) ----
+    private bool _rightPaneCollapsed;
+    private double _rightPaneWidthBeforeCollapse;
+
+    /// <summary>Single source of truth for the shared right-pane column: open width when a
+    /// panel is selected and not collapsed, zero otherwise. The title-bar toggle only ever
+    /// flips <see cref="_rightPaneCollapsed"/> — it never changes which panel is selected.</summary>
+    private void UpdateRightPaneColumn()
     {
-        if (Vm.ShowDownloadsPanel)
+        bool anySelected = Vm.ShowDevTools || Vm.ShowDownloadsPanel;
+        RightPaneToggleButton.IsEnabled = anySelected;
+
+        if (anySelected && !_rightPaneCollapsed)
         {
-            if (DevToolsColumn.Width.Value < 1)
-                DevToolsColumn.Width = new GridLength(Vm.SavedDevToolsPanelWidth >= 1 ? Vm.SavedDevToolsPanelWidth : 320);
+            var width = _rightPaneWidthBeforeCollapse >= 1
+                ? _rightPaneWidthBeforeCollapse
+                : Vm.SavedDevToolsPanelWidth >= 1
+                    ? Vm.SavedDevToolsPanelWidth
+                    : Vm.ShowDevTools ? Math.Max(360, Root.ActualWidth * 0.42) : 320;
+            DevToolsColumn.Width = new GridLength(width);
             DevToolsSplitter.Visibility = Visibility.Visible;
+            RightPaneToggleButton.IsChecked = true;
         }
-        else if (!Vm.ShowDevTools)
+        else
         {
+            if (DevToolsColumn.Width.Value >= 1) _rightPaneWidthBeforeCollapse = DevToolsColumn.Width.Value;
             DevToolsSplitter.Visibility = Visibility.Collapsed;
             DevToolsColumn.Width = new GridLength(0);
+            RightPaneToggleButton.IsChecked = false;
+            if (!anySelected) _rightPaneCollapsed = false; // fully closed also resets the collapse flag
         }
+    }
+
+    private void RightPaneToggleButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!(Vm.ShowDevTools || Vm.ShowDownloadsPanel)) return; // disabled in this state, but be safe
+        _rightPaneCollapsed = !_rightPaneCollapsed;
+        UpdateRightPaneColumn();
     }
 
     // ---- history flyout ----
