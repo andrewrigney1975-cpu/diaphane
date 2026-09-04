@@ -6,18 +6,22 @@ using Diaphane.Data;
 using Diaphane.Privacy;
 using Diaphane.Shell.Engine;
 using Diaphane.Shell.Omnibox;
+using Diaphane.Shell.Settings;
 using Diaphane.Shell.Tabs;
 
 namespace Diaphane.App.Browser;
 
 public sealed partial class ShellViewModel : ObservableObject, IDisposable
 {
-    private const string Homepage = "about:blank";
+    private const string NewTabUrl = "about:blank";
 
     private readonly IBrowserEngine _engine;
     private readonly HistoryStore _history;
     private readonly BookmarkStore _bookmarks;
-    private readonly ISearchEngine _search = new DuckDuckGoEngine();
+    private readonly SettingsStore _settingsStore;
+    private readonly AppSettings _settings;
+    private readonly SessionStore _session;
+    private ISearchEngine _search;
     private TabManager? _tabs;
     private Guid? _sandboxGroup;                 // one in-memory context per window
     private readonly Dictionary<TabModel, string> _lastRecorded = new();
@@ -30,7 +34,12 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _showPrivacyPanel;
     [ObservableProperty] private bool _showExtensionsPanel;
     [ObservableProperty] private bool _showMediaPanel;
+    [ObservableProperty] private bool _showSettingsPanel;
     [ObservableProperty] private bool _showDevTools;
+
+    /// <summary>Raised when a setting that the window must react to (theme) changes.</summary>
+    public event Action? SettingsChanged;
+    public AppTheme Theme => _settings.Theme;
 
     public ObservableCollection<TabModel> Tabs { get; } = new();
     public ObservableCollection<Bookmark> BookmarksBar { get; } = new();
@@ -39,6 +48,7 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     public PrivacyViewModel Privacy { get; }
     public ExtensionsViewModel Extensions { get; }
     public MediaViewModel MediaTools { get; }
+    public SettingsViewModel Settings { get; }
 
     public bool CanGoBack => ActiveTab?.CanGoBack ?? false;
     public bool CanGoForward => ActiveTab?.CanGoForward ?? false;
@@ -50,12 +60,41 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
         _history = new HistoryStore(Path.Combine(dataDir, "history.db"));
         _bookmarks = new BookmarkStore(Path.Combine(dataDir, "bookmarks.db"));
 
+        _settingsStore = new SettingsStore(Path.Combine(dataDir, "settings.json"));
+        _settings = _settingsStore.Load();
+        _session = new SessionStore(Path.Combine(dataDir, "session.json"));
+        _search = SearchEngines.Resolve(_settings.SearchEngineId, _settings.CustomSearchUrl);
+        ShowBookmarksBar = _settings.ShowBookmarksBar;
+
         _privacyService = new PrivacyService(
             new DataClearer(engine.StandardContext, _history),
             new PrivacySettingsStore(Path.Combine(dataDir, "privacy.json")));
         Privacy = new PrivacyViewModel(_privacyService);
         Extensions = new ExtensionsViewModel(extensions);
         MediaTools = new MediaViewModel(() => ActiveTab);
+        Settings = new SettingsViewModel(_settingsStore, _settings, OnSettingsChanged);
+    }
+
+    private void OnSettingsChanged()
+    {
+        _search = SearchEngines.Resolve(_settings.SearchEngineId, _settings.CustomSearchUrl);
+        OnPropertyChanged(nameof(Theme));
+        SettingsChanged?.Invoke();
+    }
+
+    public string HomeUrl =>
+        string.IsNullOrWhiteSpace(_settings.Homepage) ? NewTabUrl : _settings.Homepage;
+
+    [RelayCommand]
+    public void GoHome() => ActiveTab?.Navigate(HomeUrl);
+
+    /// <summary>Persist the open standard tabs for RestoreSession. Call from the window's Closed handler.</summary>
+    public void SaveSession()
+    {
+        if (_settings.Startup != StartupMode.RestoreSession) { _session.Clear(); return; }
+        var urls = Tabs.Where(t => !t.IsSandbox).Select(t => t.Url).ToArray();
+        var active = ActiveTab is { IsSandbox: false } a ? Array.IndexOf(urls, a.Url) : 0;
+        _session.Save(new SavedSession(urls, Math.Max(0, active)));
     }
 
     /// <summary>Run the configured clear-on-exit wipe. Called from the window's Closed handler.</summary>
@@ -71,7 +110,24 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
             foreach (var t in _tabs!.Tabs) Tabs.Add(t);
         };
         RefreshBookmarksBar();
-        NewTab();
+        OpenStartupTabs();
+    }
+
+    private void OpenStartupTabs()
+    {
+        if (_settings.Startup == StartupMode.RestoreSession)
+        {
+            var saved = _session.Load();
+            if (saved.Urls.Count > 0)
+            {
+                foreach (var url in saved.Urls) ActiveTab = _tabs!.NewStandardTab(url);
+                ActiveTab = Tabs.ElementAtOrDefault(saved.ActiveIndex) ?? Tabs.FirstOrDefault();
+                return;
+            }
+        }
+
+        ActiveTab = _tabs!.NewStandardTab(
+            _settings.Startup == StartupMode.Homepage ? HomeUrl : NewTabUrl);
     }
 
     // ---- active tab ----
@@ -137,7 +193,7 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public void NewTab()
     {
-        ActiveTab = _tabs!.NewStandardTab(Homepage);
+        ActiveTab = _tabs!.NewStandardTab(NewTabUrl);
     }
 
     [RelayCommand]
@@ -146,7 +202,7 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
         // All Sandbox tabs in this window share one ephemeral in-memory context
         // (they can link to each other, exactly like an Incognito window). It is
         // destroyed — and its RAM released — when the last Sandbox tab closes.
-        var t = _tabs!.NewSandboxTab(group: _sandboxGroup, url: Homepage);
+        var t = _tabs!.NewSandboxTab(group: _sandboxGroup, url: NewTabUrl);
         _sandboxGroup ??= t.ContextId;
         ActiveTab = t;
     }
@@ -198,8 +254,10 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
         switch (name)
         {
             case "privacy":
-            case "settings":
                 OpenPanel(p => ShowPrivacyPanel = p, "diaphane://privacy");
+                return true;
+            case "settings":
+                OpenPanel(p => ShowSettingsPanel = p, "diaphane://settings");
                 return true;
             case "extensions":
                 OpenPanel(p => ShowExtensionsPanel = p, "diaphane://extensions");
@@ -218,7 +276,7 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     // Only one internal panel is visible at a time.
     private void OpenPanel(Action<bool> set, string address)
     {
-        ShowPrivacyPanel = ShowExtensionsPanel = ShowMediaPanel = false;
+        ShowPrivacyPanel = ShowExtensionsPanel = ShowMediaPanel = ShowSettingsPanel = false;
         set(true);
         AddressText = address;
     }
@@ -261,6 +319,17 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
         ClosePanel(true, "diaphane://media");
     }
 
+    [RelayCommand] public void ToggleSettingsPanel()
+    {
+        if (ShowSettingsPanel) { ShowSettingsPanel = false; ClosePanel(true, "diaphane://settings"); }
+        else OpenPanel(p => ShowSettingsPanel = p, "diaphane://settings");
+    }
+    [RelayCommand] public void CloseSettingsPanel()
+    {
+        ShowSettingsPanel = false;
+        ClosePanel(true, "diaphane://settings");
+    }
+
     [RelayCommand] public void ToggleDevTools() => ShowDevTools = !ShowDevTools;
 
     [RelayCommand(CanExecute = nameof(CanGoBack))] public void GoBack() => ActiveTab?.Back();
@@ -282,7 +351,12 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     public bool ActiveIsBookmarked =>
         ActiveTab is { Url: { Length: > 0 } url } && _bookmarks.Children(null).Any(b => b.Url == url);
 
-    [RelayCommand] public void ToggleBookmarksBar() => ShowBookmarksBar = !ShowBookmarksBar;
+    [RelayCommand] public void ToggleBookmarksBar()
+    {
+        ShowBookmarksBar = !ShowBookmarksBar;
+        _settings.ShowBookmarksBar = ShowBookmarksBar;
+        _settingsStore.Save(_settings);
+    }
 
     [RelayCommand]
     public void OpenBookmark(Bookmark? b)

@@ -321,3 +321,36 @@ feature). Reworked to a docked pane:
 `PrivacySettings.EnableDevTools` (default **on**) gates the whole loopback port;
 turning it off in the privacy panel closes it (applied at launch), alongside the
 Widevine toggle.
+
+---
+
+# M10 — settings, packaging, self-update  ✅
+
+**Settings** (`diaphane://settings`, gear button). `Diaphane.Shell.Settings`:
+`AppSettings` + `SettingsStore` (one JSON file, never throws). Panel wires:
+- On startup — blank / homepage / **restore last session**
+- Homepage (+ a Home toolbar button, `GoHomeCommand`)
+- Search engine — DuckDuckGo / Startpage / Brave / Wikipedia / Mojeek / Google /
+  Custom (`{q}` template). `SearchEngines.Resolve` in Omnibox; `ShellViewModel._search`
+  re-resolves live. Every engine is a plain query GET — the omnibox still makes no
+  call while you type.
+- Appearance — Match Windows / Light / Dark → `Root.RequestedTheme`
+- Bookmarks-bar visibility now persists
+
+**Session restore.** `SessionStore` writes the standard tabs' URLs on close (only
+when startup == RestoreSession; sandbox tabs never written; internal schemes
+filtered). `ShellViewModel.OpenStartupTabs` replays them.
+
+**Self-update — manual only.** `UpdateChecker` compares the running version to a
+JSON manifest (`{"version","url"}`) at a URL the user sets in settings. Empty by
+default = dormant. Runs *only* on the "Check for updates" click — no background
+poll, nothing downloaded or installed; a newer version just offers an "Open the
+download page" link. (Consistent with the no-silent-update golden rule.)
+
+**Packaging.** `scripts/package.ps1`: publishes Diaphane.App self-contained
+(win-x64, no runtime install needed), copies the engine payload from
+`native/build/bin` beside the exe, zips to `dist/diaphane-<version>-win-x64.zip`
+(~300 MB). Verified: the unpacked build runs standalone. `<Version>` in the
+csproj (0.10.0) drives the zip name and the settings "About" line.
+
+44 shell tests green.

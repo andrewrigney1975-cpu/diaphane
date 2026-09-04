@@ -48,6 +48,9 @@ public sealed partial class MainWindow : Window
         Vm = new ShellViewModel(_cef.Engine, dataDir, _extensions);
         Vm.PropertyChanged += OnVmPropertyChanged;
         Vm.Tabs.CollectionChanged += (_, _) => SyncTabStrip();
+        Vm.SettingsChanged += ApplyTheme;
+        Vm.Settings.EngineVersion = $"diaphane {Vm.Settings.Version}  ·  {_cef.Engine.Version}";
+        ApplyTheme();
 
         _page = new CefSurface(BrowserImage, BrowserRegion);
         _dev = new CefSurface(DevToolsImage, DevToolsRegion);
@@ -71,6 +74,7 @@ public sealed partial class MainWindow : Window
         };
         Closed += (_, _) =>
         {
+            try { Vm.SaveSession(); } catch { /* best effort */ }
             try { Vm.RunClearOnExitAsync().Wait(TimeSpan.FromSeconds(5)); } catch { /* best effort */ }
             Vm.Dispose();
             _cef.Dispose();
@@ -90,6 +94,25 @@ public sealed partial class MainWindow : Window
     public static Visibility VisIf(bool b) => b ? Visibility.Visible : Visibility.Collapsed;
     public static Visibility VisIfText(string? s) => string.IsNullOrEmpty(s) ? Visibility.Collapsed : Visibility.Visible;
     public static bool Not(bool b) => !b;
+
+    private void ApplyTheme()
+    {
+        Root.RequestedTheme = Vm.Theme switch
+        {
+            Diaphane.Shell.Settings.AppTheme.Light => ElementTheme.Light,
+            Diaphane.Shell.Settings.AppTheme.Dark => ElementTheme.Dark,
+            _ => ElementTheme.Default,
+        };
+    }
+
+    private void OnOpenUpdateDownload(object sender, RoutedEventArgs e)
+    {
+        if (Vm.Settings.UpdateDownloadUrl is { Length: > 0 } url)
+        {
+            Vm.NewTab();
+            Vm.ActiveTab?.Navigate(url);
+        }
+    }
 
     public static Brush ToolbarBrush(bool isSandbox) => isSandbox
         ? new SolidColorBrush(Color.FromArgb(0x33, 0x67, 0x3A, 0xB7))

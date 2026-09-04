@@ -35,7 +35,9 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
@@ -55,8 +57,11 @@
             <Button Grid.Column="2" Command="{x:Bind Vm.ReloadCommand}" ToolTipService.ToolTip="Reload (F5)">
                 <FontIcon Glyph="&#xE72C;" FontSize="14" />
             </Button>
+            <Button Grid.Column="3" Command="{x:Bind Vm.GoHomeCommand}" ToolTipService.ToolTip="Home">
+                <FontIcon Glyph="&#xE80F;" FontSize="14" />
+            </Button>
 
-            <AutoSuggestBox x:Name="Address" Grid.Column="3" VerticalAlignment="Center"
+            <AutoSuggestBox x:Name="Address" Grid.Column="4" VerticalAlignment="Center"
                             PlaceholderText="Search or enter address"
                             QueryIcon="Find"
                             Text="{x:Bind Vm.AddressText, Mode=TwoWay}"
@@ -64,10 +69,10 @@
                             QuerySubmitted="OnAddressSubmitted"
                             SuggestionChosen="OnSuggestionChosen" />
 
-            <Button Grid.Column="4" Command="{x:Bind Vm.ToggleBookmarkCommand}" ToolTipService.ToolTip="Bookmark (Ctrl+D)">
+            <Button Grid.Column="5" Command="{x:Bind Vm.ToggleBookmarkCommand}" ToolTipService.ToolTip="Bookmark (Ctrl+D)">
                 <FontIcon Glyph="&#xE734;" FontSize="14" />
             </Button>
-            <Button Grid.Column="5" ToolTipService.ToolTip="History (Ctrl+H)">
+            <Button Grid.Column="6" ToolTipService.ToolTip="History (Ctrl+H)">
                 <FontIcon Glyph="&#xE81C;" FontSize="14" />
                 <Button.Flyout>
                     <Flyout Opening="OnHistoryFlyoutOpening">
@@ -93,23 +98,26 @@
                     </Flyout>
                 </Button.Flyout>
             </Button>
-            <Button Grid.Column="6" Command="{x:Bind Vm.NewSandboxTabCommand}" ToolTipService.ToolTip="New Sandbox tab (Ctrl+Shift+N)">
+            <Button Grid.Column="7" Command="{x:Bind Vm.NewSandboxTabCommand}" ToolTipService.ToolTip="New Sandbox tab (Ctrl+Shift+N)">
                 <FontIcon Glyph="&#xE727;" FontSize="14" Foreground="#B39DDB" />
             </Button>
-            <Button Grid.Column="7" Command="{x:Bind Vm.ToggleBookmarksBarCommand}" ToolTipService.ToolTip="Bookmarks bar (Ctrl+Shift+B)">
+            <Button Grid.Column="8" Command="{x:Bind Vm.ToggleBookmarksBarCommand}" ToolTipService.ToolTip="Bookmarks bar (Ctrl+Shift+B)">
                 <FontIcon Glyph="&#xE8A4;" FontSize="14" />
             </Button>
-            <Button Grid.Column="8" Command="{x:Bind Vm.ToggleExtensionsPanelCommand}" ToolTipService.ToolTip="Extensions (Ctrl+Shift+E)">
+            <Button Grid.Column="9" Command="{x:Bind Vm.ToggleExtensionsPanelCommand}" ToolTipService.ToolTip="Extensions (Ctrl+Shift+E)">
                 <FontIcon Glyph="&#xEA86;" FontSize="14" />
             </Button>
-            <Button Grid.Column="9" Command="{x:Bind Vm.ToggleMediaPanelCommand}" ToolTipService.ToolTip="Media &amp; codecs (Ctrl+Shift+M)">
+            <Button Grid.Column="10" Command="{x:Bind Vm.ToggleMediaPanelCommand}" ToolTipService.ToolTip="Media &amp; codecs (Ctrl+Shift+M)">
                 <FontIcon Glyph="&#xE714;" FontSize="14" />
             </Button>
-            <Button Grid.Column="10" Command="{x:Bind Vm.ToggleDevToolsCommand}" ToolTipService.ToolTip="DevTools (F12)">
+            <Button Grid.Column="11" Command="{x:Bind Vm.ToggleDevToolsCommand}" ToolTipService.ToolTip="DevTools (F12)">
                 <FontIcon Glyph="&#xEBE8;" FontSize="14" />
             </Button>
-            <Button Grid.Column="11" Command="{x:Bind Vm.TogglePrivacyPanelCommand}" ToolTipService.ToolTip="Clear browsing data (Ctrl+Shift+Del)">
+            <Button Grid.Column="12" Command="{x:Bind Vm.TogglePrivacyPanelCommand}" ToolTipService.ToolTip="Clear browsing data (Ctrl+Shift+Del)">
                 <FontIcon Glyph="&#xE72E;" FontSize="14" />
+            </Button>
+            <Button Grid.Column="13" Command="{x:Bind Vm.ToggleSettingsPanelCommand}" ToolTipService.ToolTip="Settings">
+                <FontIcon Glyph="&#xE713;" FontSize="14" />
             </Button>
         </Grid>
 
@@ -390,6 +398,73 @@
                         <Button Content="Run probe" Style="{ThemeResource AccentButtonStyle}"
                                 Command="{x:Bind Vm.MediaTools.ProbeCommand}"
                                 IsEnabled="{x:Bind local:MainWindow.Not(Vm.MediaTools.Busy), Mode=OneWay}" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- diaphane://settings -->
+        <Grid Grid.Row="3" Background="#99000000"
+              Visibility="{x:Bind local:MainWindow.VisIf(Vm.ShowSettingsPanel), Mode=OneWay}">
+            <Border MaxWidth="520" MaxHeight="680" Margin="24" Padding="24" VerticalAlignment="Top"
+                    HorizontalAlignment="Center"
+                    Background="{ThemeResource LayerFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                    CornerRadius="8">
+                <Grid RowSpacing="14">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="Settings" FontSize="18" FontWeight="SemiBold" />
+
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <StackPanel Spacing="16">
+                            <ComboBox Header="On startup" HorizontalAlignment="Stretch"
+                                      ItemsSource="{x:Bind Vm.Settings.StartupModes}"
+                                      SelectedIndex="{x:Bind Vm.Settings.StartupIndex, Mode=TwoWay}" />
+                            <TextBox Header="Homepage" PlaceholderText="about:blank"
+                                     Text="{x:Bind Vm.Settings.Homepage, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
+                            <ComboBox Header="Search engine" HorizontalAlignment="Stretch"
+                                      ItemsSource="{x:Bind Vm.Settings.SearchEngineNames}"
+                                      SelectedIndex="{x:Bind Vm.Settings.SearchEngineIndex, Mode=TwoWay}" />
+                            <TextBox Header="Custom search URL ({q} = query)"
+                                     PlaceholderText="https://example.com/search?q={q}"
+                                     Visibility="{x:Bind local:MainWindow.VisIf(Vm.Settings.IsCustomSearch), Mode=OneWay}"
+                                     Text="{x:Bind Vm.Settings.CustomSearchUrl, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
+                            <ComboBox Header="Appearance" HorizontalAlignment="Stretch"
+                                      ItemsSource="{x:Bind Vm.Settings.Themes}"
+                                      SelectedIndex="{x:Bind Vm.Settings.ThemeIndex, Mode=TwoWay}" />
+
+                            <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+
+                            <StackPanel Spacing="6">
+                                <TextBlock Text="Updates" FontWeight="SemiBold" />
+                                <TextBlock TextWrapping="Wrap" FontSize="12"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           Text="diaphane never checks for updates on its own. Point this at a JSON manifest and use the button." />
+                                <TextBox PlaceholderText="https://…/latest.json"
+                                         Text="{x:Bind Vm.Settings.UpdateManifestUrl, Mode=TwoWay, UpdateSourceTrigger=LostFocus}" />
+                                <TextBlock Text="{x:Bind Vm.Settings.UpdateStatus, Mode=OneWay}" TextWrapping="Wrap"
+                                           FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           Visibility="{x:Bind local:MainWindow.VisIfText(Vm.Settings.UpdateStatus), Mode=OneWay}" />
+                                <HyperlinkButton Content="Open the download page"
+                                                 Click="OnOpenUpdateDownload"
+                                                 Visibility="{x:Bind local:MainWindow.VisIfText(Vm.Settings.UpdateDownloadUrl), Mode=OneWay}" />
+                            </StackPanel>
+
+                            <TextBlock FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                       Text="{x:Bind Vm.Settings.EngineVersion, Mode=OneWay}" />
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <StackPanel Grid.Row="2" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                        <Button Content="Close" Command="{x:Bind Vm.CloseSettingsPanelCommand}" />
+                        <Button Content="Check for updates"
+                                Command="{x:Bind Vm.Settings.CheckForUpdatesCommand}"
+                                IsEnabled="{x:Bind local:MainWindow.Not(Vm.Settings.CheckingUpdate), Mode=OneWay}" />
                     </StackPanel>
                 </Grid>
             </Border>
