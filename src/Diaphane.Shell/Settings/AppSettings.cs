@@ -24,6 +24,15 @@ public sealed class AppSettings
 
     public bool ShowBookmarksBar { get; set; } = true;
 
+    // Window geometry + panel sizes, restored on the next launch. WindowX/Y == int.MinValue
+    // means "never saved" (let the OS place the window).
+    public int WindowX { get; set; } = int.MinValue;
+    public int WindowY { get; set; } = int.MinValue;
+    public int WindowWidth { get; set; } = 1400;
+    public int WindowHeight { get; set; } = 900;
+    public double BookmarksPanelWidth { get; set; } = 260;
+    public double DevToolsPanelWidth { get; set; }
+
     /// <summary>
     /// Optional URL of a JSON update manifest ({"version": "...", "url": "..."}).
     /// Empty = the update check is disabled. Only ever fetched on an explicit

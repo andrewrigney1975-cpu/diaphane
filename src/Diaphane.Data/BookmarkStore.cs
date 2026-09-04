@@ -40,6 +40,43 @@ public sealed class BookmarkStore : IDisposable
         return (long)(cmd.ExecuteScalar() ?? 0L);
     }
 
+    public Bookmark? Get(long id)
+    {
+        using var cmd = _db.CreateCommand();
+        cmd.CommandText = "SELECT id,parent_id,is_folder,title,url,position FROM bookmarks WHERE id=$id";
+        cmd.Parameters.AddWithValue("$id", id);
+        using var r = cmd.ExecuteReader();
+        if (!r.Read()) return null;
+        return new Bookmark(r.GetInt64(0), r.IsDBNull(1) ? null : r.GetInt64(1),
+            r.GetInt32(2) == 1, r.GetString(3), r.IsDBNull(4) ? null : r.GetString(4), r.GetInt32(5));
+    }
+
+    /// <summary>Rename a group, or retitle/repoint a bookmark. Pass the existing value for whichever
+    /// field isn't changing — <paramref name="url"/> is ignored for a group.</summary>
+    public void Update(long id, string title, string? url)
+    {
+        using var cmd = _db.CreateCommand();
+        cmd.CommandText = "UPDATE bookmarks SET title=$t, url=$u WHERE id=$id";
+        cmd.Parameters.AddWithValue("$t", title);
+        cmd.Parameters.AddWithValue("$u", (object?)url ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$id", id);
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>Reparent a bookmark or group (drag-and-drop into a group, or to the root). Appends to the end.</summary>
+    public void MoveTo(long id, long? newParentId)
+    {
+        using var cmd = _db.CreateCommand();
+        cmd.CommandText = """
+            UPDATE bookmarks SET parent_id=$p,
+                position=COALESCE((SELECT MAX(position)+1 FROM bookmarks WHERE parent_id IS $p),0)
+            WHERE id=$id;
+        """;
+        cmd.Parameters.AddWithValue("$p", (object?)newParentId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$id", id);
+        cmd.ExecuteNonQuery();
+    }
+
     public void Remove(long id)
     {
         using var cmd = _db.CreateCommand();

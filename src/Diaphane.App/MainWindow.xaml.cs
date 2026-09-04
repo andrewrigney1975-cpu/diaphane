@@ -7,9 +7,11 @@ using Diaphane.Shell.Engine;
 using Diaphane.Shell.Tabs;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
 using Windows.System;
 using Windows.UI;
@@ -30,7 +32,6 @@ public sealed partial class MainWindow : Window
     {
         InitializeComponent();
         Title = "diaphane";
-        AppWindow.Resize(new Windows.Graphics.SizeInt32(1400, 900));
 
         var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "diaphane.ico");
         if (File.Exists(iconPath))
@@ -39,6 +40,9 @@ public sealed partial class MainWindow : Window
         var dataDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Diaphane");
         Directory.CreateDirectory(dataDir);
+
+        ExtendsContentIntoTitleBar = true;
+        SetTitleBar(AppTitleBar);
 
         _extensions = new ExtensionStore(Path.Combine(dataDir, "extensions.db"));
         var privacySettings = new Diaphane.Privacy.PrivacySettingsStore(Path.Combine(dataDir, "privacy.json")).Load();
@@ -52,6 +56,7 @@ public sealed partial class MainWindow : Window
         Vm.SettingsChanged += ApplyTheme;
         Vm.Settings.EngineVersion = $"diaphane {Vm.Settings.Version}  ·  {_cef.Engine.Version}";
         ApplyTheme();
+        RestoreWindowGeometry();
 
         _page = new CefSurface(BrowserImage, BrowserFocus);
         _dev = new CefSurface(DevToolsImage, DevToolsFocus);
@@ -64,6 +69,7 @@ public sealed partial class MainWindow : Window
                 Vm.Start(0);
                 SyncTabStrip();
                 AttachActiveView();
+                UpdateBookmarksPanel();
             }
             catch (Exception ex)
             {
@@ -80,6 +86,13 @@ public sealed partial class MainWindow : Window
         Closed += (_, _) =>
         {
             try { Vm.SaveSession(); } catch { /* best effort */ }
+            try
+            {
+                Vm.SaveWindowState(AppWindow.Position.X, AppWindow.Position.Y,
+                    AppWindow.Size.Width, AppWindow.Size.Height,
+                    BookmarksColumn.Width.Value, DevToolsColumn.Width.Value);
+            }
+            catch { /* best effort */ }
             try { Vm.RunClearOnExitAsync().Wait(TimeSpan.FromSeconds(5)); } catch { /* best effort */ }
             Vm.Dispose();
             _cef.Dispose();
@@ -87,6 +100,16 @@ public sealed partial class MainWindow : Window
         };
 
         InstallAccelerators();
+    }
+
+    /// <summary>Restore window size/position from the last session; a never-saved X/Y (int.MinValue)
+    /// leaves placement to the OS, matching a first run.</summary>
+    private void RestoreWindowGeometry()
+    {
+        var (x, y, w, h) = Vm.WindowGeometry;
+        AppWindow.Resize(new Windows.Graphics.SizeInt32(w > 0 ? w : 1400, h > 0 ? h : 900));
+        if (x != int.MinValue && y != int.MinValue)
+            AppWindow.Move(new Windows.Graphics.PointInt32(x, y));
     }
 
     // ---- x:Bind function helpers (sandbox accent) ----
@@ -258,6 +281,9 @@ public sealed partial class MainWindow : Window
             case nameof(ShellViewModel.ShowDevTools):
                 UpdateDevToolsPane();
                 break;
+            case nameof(ShellViewModel.ShowBookmarksBar):
+                UpdateBookmarksPanel();
+                break;
         }
     }
 
@@ -274,7 +300,8 @@ public sealed partial class MainWindow : Window
         if (Vm.ShowDevTools && Vm.ActiveTab is { } tab)
         {
             if (DevToolsColumn.Width.Value < 1)
-                DevToolsColumn.Width = new GridLength(Math.Max(360, Root.ActualWidth * 0.42));
+                DevToolsColumn.Width = new GridLength(
+                    Vm.SavedDevToolsPanelWidth >= 1 ? Vm.SavedDevToolsPanelWidth : Math.Max(360, Root.ActualWidth * 0.42));
             DevToolsSplitter.Visibility = Visibility.Visible;
             Root.UpdateLayout();   // give the pane a real size before we ask CEF to render into it
 
@@ -309,17 +336,228 @@ public sealed partial class MainWindow : Window
             Vm.NavigateCommand.Execute(v.Url);
     }
 
-    // ---- bookmarks bar ----
-    private void OnBookmarkClick(object sender, RoutedEventArgs e)
+    // ---- bookmarks panel ----
+    private void UpdateBookmarksPanel()
     {
-        if ((sender as FrameworkElement)?.Tag is Diaphane.Data.Bookmark b)
-            Vm.OpenBookmarkCommand.Execute(b);
+        if (Vm.ShowBookmarksBar)
+        {
+            if (BookmarksColumn.Width.Value < 1)
+                BookmarksColumn.Width = new GridLength(Vm.SavedBookmarksPanelWidth >= 1 ? Vm.SavedBookmarksPanelWidth : 260);
+        }
+        else
+        {
+            BookmarksColumn.Width = new GridLength(0);
+        }
     }
 
-    private void OnBookmarkRemove(object sender, RoutedEventArgs e)
+    private void BookmarksTree_ItemInvoked(TreeView sender, TreeViewItemInvokedEventArgs args)
     {
-        if ((sender as FrameworkElement)?.Tag is Diaphane.Data.Bookmark b)
-            Vm.RemoveBookmarkCommand.Execute(b);
+        if (args.InvokedItem is BookmarkNode { IsFolder: false } node)
+            Vm.OpenBookmarkCommand.Execute(node.Model);
+    }
+
+    private void BookmarksTree_RightTapped(object sender, RightTappedRoutedEventArgs e)
+    {
+        var node = (e.OriginalSource as FrameworkElement)?.DataContext as BookmarkNode
+                   ?? FindBookmarkNodeInParents(e.OriginalSource as DependencyObject);
+
+        var element = e.OriginalSource as FrameworkElement ?? BookmarksTree;
+        var flyout = new MenuFlyout();
+
+        if (node is null)
+        {
+            var createGroup = new MenuFlyoutItem { Text = "Create Group…" };
+            createGroup.Click += async (_, _) => await PromptCreateGroupAsync(null);
+            flyout.Items.Add(createGroup);
+        }
+        else if (node.IsFolder)
+        {
+            var createGroup = new MenuFlyoutItem { Text = "Create Group…" };
+            createGroup.Click += async (_, _) => await PromptCreateGroupAsync(node.Model.Id);
+            flyout.Items.Add(createGroup);
+
+            var rename = new MenuFlyoutItem { Text = "Rename…" };
+            rename.Click += async (_, _) => await PromptRenameAsync(node.Model);
+            flyout.Items.Add(rename);
+
+            flyout.Items.Add(new MenuFlyoutSeparator());
+
+            var openAll = new MenuFlyoutItem { Text = "Open All in new tabs" };
+            openAll.Click += (_, _) => Vm.OpenGroupInNewTabs(node, sandbox: false);
+            flyout.Items.Add(openAll);
+
+            var openAllSandbox = new MenuFlyoutItem { Text = "Open all in new Sandbox tabs" };
+            openAllSandbox.Click += (_, _) => Vm.OpenGroupInNewTabs(node, sandbox: true);
+            flyout.Items.Add(openAllSandbox);
+
+            flyout.Items.Add(new MenuFlyoutSeparator());
+
+            var remove = new MenuFlyoutItem { Text = "Remove" };
+            remove.Click += (_, _) => Vm.RemoveBookmarkCommand.Execute(node.Model);
+            flyout.Items.Add(remove);
+        }
+        else
+        {
+            var open = new MenuFlyoutItem { Text = "Open" };
+            open.Click += (_, _) => Vm.OpenBookmarkCommand.Execute(node.Model);
+            flyout.Items.Add(open);
+
+            var openNewTab = new MenuFlyoutItem { Text = "Open in new tab" };
+            openNewTab.Click += (_, _) => Vm.OpenBookmarkInNewTabCommand.Execute(node.Model);
+            flyout.Items.Add(openNewTab);
+
+            flyout.Items.Add(new MenuFlyoutSeparator());
+
+            var edit = new MenuFlyoutItem { Text = "Edit…" };
+            edit.Click += async (_, _) => await PromptEditBookmarkAsync(node.Model);
+            flyout.Items.Add(edit);
+
+            var remove = new MenuFlyoutItem { Text = "Remove" };
+            remove.Click += (_, _) => Vm.RemoveBookmarkCommand.Execute(node.Model);
+            flyout.Items.Add(remove);
+        }
+
+        flyout.ShowAt(element, new FlyoutShowOptions { Position = e.GetPosition(element) });
+        e.Handled = true;
+    }
+
+    private static BookmarkNode? FindBookmarkNodeInParents(DependencyObject? start)
+    {
+        for (var d = start; d is not null; d = VisualTreeHelper.GetParent(d))
+            if (d is FrameworkElement { DataContext: BookmarkNode node }) return node;
+        return null;
+    }
+
+    private async Task PromptCreateGroupAsync(long? parentId)
+    {
+        var name = await PromptTextAsync("Create Group", "Group name", "New Group", "Create");
+        if (name is not null) Vm.CreateGroup(parentId, name);
+    }
+
+    private async Task PromptRenameAsync(Bookmark b)
+    {
+        var name = await PromptTextAsync("Rename", "Name", b.Title, "Rename");
+        if (name is not null && name != b.Title) Vm.RenameBookmark(b, name);
+    }
+
+    private async Task<string?> PromptTextAsync(string title, string header, string prefill, string primary)
+    {
+        var box = new TextBox { Header = header, Text = prefill, Width = 300 };
+        var dialog = new ContentDialog
+        {
+            XamlRoot = Content.XamlRoot,
+            Title = title,
+            Content = box,
+            PrimaryButtonText = primary,
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+        };
+
+        return await dialog.ShowAsync() == ContentDialogResult.Primary && !string.IsNullOrWhiteSpace(box.Text)
+            ? box.Text.Trim()
+            : null;
+    }
+
+    private async Task PromptEditBookmarkAsync(Bookmark b)
+    {
+        var titleBox = new TextBox { Header = "Name", Text = b.Title, Width = 340 };
+        var urlBox = new TextBox { Header = "URL", Text = b.Url ?? "", Width = 340, Margin = new Thickness(0, 8, 0, 0) };
+        var dialog = new ContentDialog
+        {
+            XamlRoot = Content.XamlRoot,
+            Title = "Edit bookmark",
+            Content = new StackPanel { Children = { titleBox, urlBox } },
+            PrimaryButtonText = "Save",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        var title = titleBox.Text.Trim();
+        var url = urlBox.Text.Trim();
+        if (title.Length == 0 || url.Length == 0) return;
+        Vm.EditBookmark(b, title, url);
+    }
+
+    // ---- bookmarks drag-and-drop (per-row CanDrag, mirrors the tab-strip's approach) ----
+    private BookmarkNode? _draggedBookmark;
+
+    private void BookmarkRow_DragStarting(UIElement sender, DragStartingEventArgs args)
+    {
+        if ((sender as FrameworkElement)?.DataContext is BookmarkNode node)
+        {
+            _draggedBookmark = node;
+            args.AllowedOperations = DataPackageOperation.Move;
+            args.Data.RequestedOperation = DataPackageOperation.Move;
+            args.Data.SetText(node.DisplayName);
+        }
+        else
+        {
+            args.Cancel = true;
+        }
+    }
+
+    private void BookmarkRow_DropCompleted(UIElement sender, DropCompletedEventArgs args) => _draggedBookmark = null;
+
+    private void BookmarkRow_DragOver(object sender, DragEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not BookmarkNode target || _draggedBookmark is not { } dragged
+            || !target.IsFolder || target.Model.Id == dragged.Model.Id)
+        {
+            e.AcceptedOperation = DataPackageOperation.None;
+            return;
+        }
+
+        e.AcceptedOperation = DataPackageOperation.Move;
+        e.DragUIOverride.IsCaptionVisible = true;
+        e.DragUIOverride.IsGlyphVisible = false;
+        e.DragUIOverride.Caption = $"Move into {target.DisplayName}";
+        e.Handled = true;
+    }
+
+    private void BookmarkRow_Drop(object sender, DragEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is not BookmarkNode target || _draggedBookmark is not { } dragged)
+            return;
+        e.Handled = true;
+        Vm.MoveBookmark(dragged.Model.Id, target.Model.Id);
+        _draggedBookmark = null;
+    }
+
+    // Dropping on the panel's empty background (not on any row) moves the bookmark back to the top level.
+    private void BookmarksRoot_DragOver(object sender, DragEventArgs e)
+    {
+        e.AcceptedOperation = _draggedBookmark is not null ? DataPackageOperation.Move : DataPackageOperation.None;
+        if (_draggedBookmark is null) return;
+        e.DragUIOverride.IsCaptionVisible = true;
+        e.DragUIOverride.IsGlyphVisible = false;
+        e.DragUIOverride.Caption = "Move to top level";
+    }
+
+    private void BookmarksRoot_Drop(object sender, DragEventArgs e)
+    {
+        if (_draggedBookmark is { } dragged) Vm.MoveBookmark(dragged.Model.Id, null);
+        _draggedBookmark = null;
+    }
+
+    // ---- bookmarks panel splitter ----
+    private bool _draggingBookmarksSplitter;
+    private void OnBookmarksSplitterPressed(object sender, PointerRoutedEventArgs e)
+    {
+        _draggingBookmarksSplitter = true;
+        BookmarksSplitter.CapturePointer(e.Pointer);
+    }
+    private void OnBookmarksSplitterMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_draggingBookmarksSplitter) return;
+        var x = e.GetCurrentPoint(Root).Position.X;
+        var w = Math.Clamp(x - 48, 200, 460);
+        BookmarksColumn.Width = new GridLength(w);
+    }
+    private void OnBookmarksSplitterReleased(object sender, PointerRoutedEventArgs e)
+    {
+        _draggingBookmarksSplitter = false;
+        BookmarksSplitter.ReleasePointerCapture(e.Pointer);
     }
 
     // ---- page surface (delegates to CefSurface) ----

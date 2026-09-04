@@ -42,7 +42,9 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     public AppTheme Theme => _settings.Theme;
 
     public ObservableCollection<TabModel> Tabs { get; } = new();
-    public ObservableCollection<Bookmark> BookmarksBar { get; } = new();
+
+    /// <summary>Root-level bookmarks and groups, for the left bookmarks panel's TreeView.</summary>
+    public ObservableCollection<BookmarkNode> BookmarkTree { get; } = new();
 
     private readonly PrivacyService _privacyService;
     public PrivacyViewModel Privacy { get; }
@@ -100,6 +102,26 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     /// <summary>Run the configured clear-on-exit wipe. Called from the window's Closed handler.</summary>
     public Task RunClearOnExitAsync() => _privacyService.RunClearOnExitAsync();
 
+    // ---- window geometry + panel sizes ----
+    public (int X, int Y, int Width, int Height) WindowGeometry =>
+        (_settings.WindowX, _settings.WindowY, _settings.WindowWidth, _settings.WindowHeight);
+
+    public double SavedBookmarksPanelWidth => _settings.BookmarksPanelWidth;
+    public double SavedDevToolsPanelWidth => _settings.DevToolsPanelWidth;
+
+    /// <summary>Persist window position/size and the current panel widths. Call from the window's
+    /// Closed handler. A panel width of 0 (closed) is ignored — the last open width is kept.</summary>
+    public void SaveWindowState(int x, int y, int width, int height, double bookmarksWidth, double devToolsWidth)
+    {
+        _settings.WindowX = x;
+        _settings.WindowY = y;
+        _settings.WindowWidth = width;
+        _settings.WindowHeight = height;
+        if (bookmarksWidth >= 1) _settings.BookmarksPanelWidth = bookmarksWidth;
+        if (devToolsWidth >= 1) _settings.DevToolsPanelWidth = devToolsWidth;
+        _settingsStore.Save(_settings);
+    }
+
     public void Start(nint hostHwnd)
     {
         if (_tabs is not null) return;
@@ -109,7 +131,7 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
             Tabs.Clear();
             foreach (var t in _tabs!.Tabs) Tabs.Add(t);
         };
-        RefreshBookmarksBar();
+        RefreshBookmarkTree();
         OpenStartupTabs();
     }
 
@@ -341,20 +363,31 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     [RelayCommand(CanExecute = nameof(CanGoForward))] public void GoForward() => ActiveTab?.Forward();
     [RelayCommand] public void Reload() => ActiveTab?.Reload();
 
-    // ---- M5: bookmarks + history ----
+    // ---- bookmarks + history ----
     [RelayCommand]
     public void ToggleBookmark()
     {
         if (ActiveTab is not { Url: { Length: > 0 } url } || url.StartsWith("about:")) return;
-        var existing = _bookmarks.Children(null).FirstOrDefault(b => b.Url == url);
+        var existing = FindBookmarkByUrl(null, url);
         if (existing is not null) _bookmarks.Remove(existing.Id);
         else _bookmarks.Add(string.IsNullOrEmpty(ActiveTab.Title) ? url : ActiveTab.Title, url);
-        RefreshBookmarksBar();
+        RefreshBookmarkTree();
         OnPropertyChanged(nameof(ActiveIsBookmarked));
     }
 
     public bool ActiveIsBookmarked =>
-        ActiveTab is { Url: { Length: > 0 } url } && _bookmarks.Children(null).Any(b => b.Url == url);
+        ActiveTab is { Url: { Length: > 0 } url } && FindBookmarkByUrl(null, url) is not null;
+
+    /// <summary>Search a folder's children, recursively, for a bookmark with this URL.</summary>
+    private Bookmark? FindBookmarkByUrl(long? parentId, string url)
+    {
+        foreach (var b in _bookmarks.Children(parentId))
+        {
+            if (!b.IsFolder && b.Url == url) return b;
+            if (b.IsFolder && FindBookmarkByUrl(b.Id, url) is { } found) return found;
+        }
+        return null;
+    }
 
     [RelayCommand] public void ToggleBookmarksBar()
     {
@@ -370,15 +403,105 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    public void RemoveBookmark(Bookmark? b)
+    public void OpenBookmarkInNewTab(Bookmark? b)
     {
-        if (b is not null) { _bookmarks.Remove(b.Id); RefreshBookmarksBar(); }
+        if (b?.Url is { Length: > 0 } url) ActiveTab = _tabs!.NewStandardTab(url);
     }
 
-    private void RefreshBookmarksBar()
+    [RelayCommand]
+    public void RemoveBookmark(Bookmark? b)
     {
-        BookmarksBar.Clear();
-        foreach (var b in _bookmarks.Children(null).Where(b => !b.IsFolder)) BookmarksBar.Add(b);
+        if (b is null) return;
+        _bookmarks.Remove(b.Id); // cascades to any children of a removed group
+        RefreshBookmarkTree();
+        OnPropertyChanged(nameof(ActiveIsBookmarked));
+    }
+
+    /// <summary>Create a new group (folder) under <paramref name="parentId"/>, or at the root.</summary>
+    public void CreateGroup(long? parentId, string title)
+    {
+        _bookmarks.Add(title, null, parentId, isFolder: true);
+        RefreshBookmarkTree();
+    }
+
+    /// <summary>Rename a group or a bookmark (title only — a bookmark's URL is untouched).</summary>
+    public void RenameBookmark(Bookmark b, string title)
+    {
+        _bookmarks.Update(b.Id, title, b.Url);
+        RefreshBookmarkTree();
+    }
+
+    /// <summary>Retitle and/or repoint a bookmark.</summary>
+    public void EditBookmark(Bookmark b, string title, string url)
+    {
+        _bookmarks.Update(b.Id, title, url);
+        RefreshBookmarkTree();
+        OnPropertyChanged(nameof(ActiveIsBookmarked));
+    }
+
+    /// <summary>Open every bookmark in a group (recursively, including nested groups), each in its own
+    /// new tab — standard or Sandbox. Sandbox tabs share this window's one ephemeral context, same as
+    /// the New Sandbox tab action.</summary>
+    public void OpenGroupInNewTabs(BookmarkNode group, bool sandbox)
+    {
+        foreach (var url in CollectUrls(group))
+        {
+            if (sandbox)
+            {
+                var t = _tabs!.NewSandboxTab(group: _sandboxGroup, url: url);
+                _sandboxGroup ??= t.ContextId;
+                ActiveTab = t;
+            }
+            else
+            {
+                ActiveTab = _tabs!.NewStandardTab(url);
+            }
+        }
+    }
+
+    private static IEnumerable<string> CollectUrls(BookmarkNode node)
+    {
+        foreach (var child in node.Children)
+        {
+            if (child.IsFolder)
+                foreach (var url in CollectUrls(child)) yield return url;
+            else if (child.Model.Url is { Length: > 0 } url)
+                yield return url;
+        }
+    }
+
+    /// <summary>Drag-and-drop reparent. Refuses to move a group into itself or one of its own descendants.</summary>
+    public void MoveBookmark(long id, long? newParentId)
+    {
+        if (id == newParentId || IsDescendantOf(newParentId, id)) return;
+        _bookmarks.MoveTo(id, newParentId);
+        RefreshBookmarkTree();
+    }
+
+    private bool IsDescendantOf(long? candidateId, long ancestorId)
+    {
+        for (var current = candidateId; current is { } id; current = _bookmarks.Get(id)?.ParentId)
+            if (id == ancestorId) return true;
+        return false;
+    }
+
+    private void RefreshBookmarkTree()
+    {
+        BookmarkTree.Clear();
+        foreach (var node in BuildBookmarkNodes(null)) BookmarkTree.Add(node);
+    }
+
+    private List<BookmarkNode> BuildBookmarkNodes(long? parentId)
+    {
+        var nodes = new List<BookmarkNode>();
+        foreach (var b in _bookmarks.Children(parentId))
+        {
+            var node = new BookmarkNode { Model = b };
+            if (b.IsFolder)
+                foreach (var child in BuildBookmarkNodes(b.Id)) node.Children.Add(child);
+            nodes.Add(node);
+        }
+        return nodes;
     }
 
     public IReadOnlyList<VisitEntry> RecentHistory(int n = 200) => _history.Recent(n);

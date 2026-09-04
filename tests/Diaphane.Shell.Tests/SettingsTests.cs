@@ -21,6 +21,12 @@ public sealed class SettingsTests : IDisposable
             SearchEngineId = "brave",
             Theme = AppTheme.Dark,
             ShowBookmarksBar = false,
+            WindowX = 120,
+            WindowY = 80,
+            WindowWidth = 1600,
+            WindowHeight = 1000,
+            BookmarksPanelWidth = 320,
+            DevToolsPanelWidth = 420,
         });
 
         var loaded = new SettingsStore(path).Load();
@@ -29,6 +35,24 @@ public sealed class SettingsTests : IDisposable
         Assert.Equal("brave", loaded.SearchEngineId);
         Assert.Equal(AppTheme.Dark, loaded.Theme);
         Assert.False(loaded.ShowBookmarksBar);
+        Assert.Equal(120, loaded.WindowX);
+        Assert.Equal(80, loaded.WindowY);
+        Assert.Equal(1600, loaded.WindowWidth);
+        Assert.Equal(1000, loaded.WindowHeight);
+        Assert.Equal(320, loaded.BookmarksPanelWidth);
+        Assert.Equal(420, loaded.DevToolsPanelWidth);
+    }
+
+    [Fact]
+    public void AppSettings_defaults_are_first_run_friendly()
+    {
+        var defaults = new AppSettings();
+        Assert.Equal(int.MinValue, defaults.WindowX);
+        Assert.Equal(int.MinValue, defaults.WindowY);
+        Assert.Equal(1400, defaults.WindowWidth);
+        Assert.Equal(900, defaults.WindowHeight);
+        Assert.Equal(260, defaults.BookmarksPanelWidth);
+        Assert.Equal(0, defaults.DevToolsPanelWidth);
     }
 
     [Fact]
