@@ -33,6 +33,10 @@ public sealed partial class MainWindow : Window
         Title = "diaphane";
         AppWindow.Resize(new Windows.Graphics.SizeInt32(1400, 900));
 
+        var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "diaphane.ico");
+        if (File.Exists(iconPath))
+            AppWindow.SetIcon(iconPath);
+
         var dataDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Diaphane");
 
