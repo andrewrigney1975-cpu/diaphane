@@ -229,7 +229,6 @@ public sealed partial class MainWindow : Window
         Add(VirtualKey.E, CtrlShift, () => Vm.ToggleExtensionsPanelCommand.Execute(null));
         Add(VirtualKey.I, CtrlShift, () => Vm.ToggleDevToolsCommand.Execute(null));
         Add(VirtualKey.F12, VirtualKeyModifiers.None, () => Vm.ToggleDevToolsCommand.Execute(null));
-        Add(VirtualKey.M, CtrlShift, () => Vm.ToggleMediaPanelCommand.Execute(null));
         Add(VirtualKey.J, Ctrl, () => Vm.ToggleDownloadsPanelCommand.Execute(null));
     }
 
@@ -335,6 +334,7 @@ public sealed partial class MainWindow : Window
             await System.Threading.Tasks.Task.Delay(500);
         }
     }
+
 
     private void OnVmPropertyChanged(object? s, PropertyChangedEventArgs e)
     {

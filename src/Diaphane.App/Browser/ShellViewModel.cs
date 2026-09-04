@@ -35,7 +35,6 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _showBookmarksBar = true;
     [ObservableProperty] private bool _showPrivacyPanel;
     [ObservableProperty] private bool _showExtensionsPanel;
-    [ObservableProperty] private bool _showMediaPanel;
     [ObservableProperty] private bool _showSettingsPanel;
     [ObservableProperty] private bool _showDevTools;
     [ObservableProperty] private bool _showDownloadsPanel;
@@ -305,7 +304,7 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
                 return true;
             case "media":
             case "codecs":
-                OpenPanel(p => ShowMediaPanel = p, "diaphane://media");
+                OpenPanel(p => ShowSettingsPanel = p, "diaphane://settings"); // now a Settings section
                 return true;
             case "newtab":
                 return false; // handled as a real (blank) navigation
@@ -317,7 +316,7 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     // Only one internal panel is visible at a time.
     private void OpenPanel(Action<bool> set, string address)
     {
-        ShowPrivacyPanel = ShowExtensionsPanel = ShowMediaPanel = ShowSettingsPanel = false;
+        ShowPrivacyPanel = ShowExtensionsPanel = ShowSettingsPanel = false;
         set(true);
         AddressText = address;
     }
@@ -347,17 +346,6 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     {
         ShowExtensionsPanel = false;
         ClosePanel(true, "diaphane://extensions");
-    }
-
-    [RelayCommand] public void ToggleMediaPanel()
-    {
-        if (ShowMediaPanel) { ShowMediaPanel = false; ClosePanel(true, "diaphane://media"); }
-        else OpenPanel(p => ShowMediaPanel = p, "diaphane://media");
-    }
-    [RelayCommand] public void CloseMediaPanel()
-    {
-        ShowMediaPanel = false;
-        ClosePanel(true, "diaphane://media");
     }
 
     [RelayCommand] public void ToggleSettingsPanel()

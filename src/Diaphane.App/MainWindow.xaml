@@ -132,12 +132,6 @@
                         <FontIcon Glyph="&#xEA86;" FontSize="18" />
                     </ToggleButton>
                     <ToggleButton Style="{StaticResource ActivityBarToggleButtonStyle}"
-                                  Command="{x:Bind Vm.ToggleMediaPanelCommand}"
-                                  IsChecked="{x:Bind Vm.ShowMediaPanel, Mode=OneWay}"
-                                  AutomationProperties.Name="Media and codecs" ToolTipService.ToolTip="Media &amp; codecs (Ctrl+Shift+M)">
-                        <FontIcon Glyph="&#xE714;" FontSize="18" />
-                    </ToggleButton>
-                    <ToggleButton Style="{StaticResource ActivityBarToggleButtonStyle}"
                                   Command="{x:Bind Vm.ToggleDevToolsCommand}"
                                   IsChecked="{x:Bind Vm.ShowDevTools, Mode=OneWay}"
                                   AutomationProperties.Name="DevTools" ToolTipService.ToolTip="DevTools (F12)">
@@ -485,92 +479,6 @@
             </Border>
         </Grid>
 
-        <!-- diaphane://media -->
-        <Grid Grid.Row="2" Grid.ColumnSpan="3" Background="#99000000"
-              Visibility="{x:Bind local:MainWindow.VisIf(Vm.ShowMediaPanel), Mode=OneWay}">
-            <Border MaxWidth="560" MaxHeight="640" Margin="24" Padding="24" VerticalAlignment="Top"
-                    HorizontalAlignment="Center"
-                    Background="{ThemeResource LayerFillColorDefaultBrush}"
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
-                    CornerRadius="8">
-                <Grid RowSpacing="12">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-
-                    <TextBlock Grid.Row="0" Text="Media &amp; codecs" FontSize="18" FontWeight="SemiBold" />
-                    <TextBlock Grid.Row="1" TextWrapping="Wrap"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                               Text="What this build can actually decode, probed live in the active tab. Nothing is sent anywhere." />
-
-                    <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto" MinHeight="120">
-                        <StackPanel Spacing="16">
-                            <StackPanel Spacing="4">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="110" />
-                                        <ColumnDefinition Width="90" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0" Text="Codec" FontWeight="SemiBold" FontSize="12" />
-                                    <TextBlock Grid.Column="1" Text="canPlayType" FontWeight="SemiBold" FontSize="12" />
-                                    <TextBlock Grid.Column="2" Text="MSE" FontWeight="SemiBold" FontSize="12" />
-                                </Grid>
-                                <ItemsControl ItemsSource="{x:Bind Vm.MediaTools.Codecs, Mode=OneWay}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate x:DataType="browser:CodecRow">
-                                            <Grid Padding="0,4">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="110" />
-                                                    <ColumnDefinition Width="90" />
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="{x:Bind Name}" />
-                                                <TextBlock Grid.Column="1" Text="{x:Bind Playback}" Opacity="0.8" />
-                                                <TextBlock Grid.Column="2" Text="{x:Bind MediaSource}" Opacity="0.8" />
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </StackPanel>
-
-                            <StackPanel Spacing="4">
-                                <TextBlock Text="DRM key systems (EME)" FontWeight="SemiBold" FontSize="12" />
-                                <ItemsControl ItemsSource="{x:Bind Vm.MediaTools.KeySystems, Mode=OneWay}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate x:DataType="browser:KeySystemRow">
-                                            <Grid Padding="0,4">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*" />
-                                                    <ColumnDefinition Width="130" />
-                                                </Grid.ColumnDefinitions>
-                                                <TextBlock Grid.Column="0" Text="{x:Bind Name}" />
-                                                <TextBlock Grid.Column="1" Text="{x:Bind Status}" Opacity="0.8" />
-                                            </Grid>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </StackPanel>
-                        </StackPanel>
-                    </ScrollViewer>
-
-                    <TextBlock Grid.Row="3" Text="{x:Bind Vm.MediaTools.Status, Mode=OneWay}" TextWrapping="Wrap"
-                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-
-                    <StackPanel Grid.Row="4" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
-                        <Button Content="Close" Command="{x:Bind Vm.CloseMediaPanelCommand}" />
-                        <Button Content="Run probe" Style="{ThemeResource AccentButtonStyle}"
-                                Command="{x:Bind Vm.MediaTools.ProbeCommand}"
-                                IsEnabled="{x:Bind local:MainWindow.Not(Vm.MediaTools.Busy), Mode=OneWay}" />
-                    </StackPanel>
-                </Grid>
-            </Border>
-        </Grid>
-
         <!-- diaphane://settings -->
         <Grid Grid.Row="2" Grid.ColumnSpan="3" Background="#99000000"
               Visibility="{x:Bind local:MainWindow.VisIf(Vm.ShowSettingsPanel), Mode=OneWay}">
@@ -621,6 +529,67 @@
                                     <Button Grid.Column="1" Content="Browse…" VerticalAlignment="Bottom"
                                             Click="OnBrowseDownloadDirectoryClick" />
                                 </Grid>
+                            </StackPanel>
+
+                            <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
+
+                            <StackPanel Spacing="6">
+                                <Grid>
+                                    <TextBlock Text="Media &amp; codecs" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                    <Button Content="Run probe" HorizontalAlignment="Right"
+                                            Command="{x:Bind Vm.MediaTools.ProbeCommand}"
+                                            IsEnabled="{x:Bind local:MainWindow.Not(Vm.MediaTools.Busy), Mode=OneWay}" />
+                                </Grid>
+                                <TextBlock TextWrapping="Wrap" FontSize="12"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           Text="What this build can actually decode, probed live in the active tab. Nothing is sent anywhere." />
+
+                                <Grid Padding="0,4,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="110" />
+                                        <ColumnDefinition Width="90" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" Text="Codec" FontWeight="SemiBold" FontSize="12" />
+                                    <TextBlock Grid.Column="1" Text="canPlayType" FontWeight="SemiBold" FontSize="12" />
+                                    <TextBlock Grid.Column="2" Text="MSE" FontWeight="SemiBold" FontSize="12" />
+                                </Grid>
+                                <ItemsControl ItemsSource="{x:Bind Vm.MediaTools.Codecs, Mode=OneWay}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="browser:CodecRow">
+                                            <Grid Padding="0,4">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="110" />
+                                                    <ColumnDefinition Width="90" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="{x:Bind Name}" />
+                                                <TextBlock Grid.Column="1" Text="{x:Bind Playback}" Opacity="0.8" />
+                                                <TextBlock Grid.Column="2" Text="{x:Bind MediaSource}" Opacity="0.8" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <TextBlock Text="DRM key systems (EME)" FontWeight="SemiBold" FontSize="12" Margin="0,8,0,0" />
+                                <ItemsControl ItemsSource="{x:Bind Vm.MediaTools.KeySystems, Mode=OneWay}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="browser:KeySystemRow">
+                                            <Grid Padding="0,4">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="130" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="{x:Bind Name}" />
+                                                <TextBlock Grid.Column="1" Text="{x:Bind Status}" Opacity="0.8" />
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <TextBlock Text="{x:Bind Vm.MediaTools.Status, Mode=OneWay}" TextWrapping="Wrap"
+                                           FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                           Visibility="{x:Bind local:MainWindow.VisIfText(Vm.MediaTools.Status), Mode=OneWay}" />
                             </StackPanel>
 
                             <Border Height="1" Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
