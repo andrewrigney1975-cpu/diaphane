@@ -57,6 +57,20 @@ class DcClient : public CefClient,
   CefRefPtr<CefRenderHandler> GetRenderHandler() override { return this; }
 
   // CefLifeSpanHandler
+  // No popup window support (no second WinUI host to give it, and the shell has no
+  // concept of an extra top-level browser window). Left unhandled, CEF's default is
+  // to allow the popup AND hand it this same DcClient — a real, un-parented native
+  // window would appear, and closing it would fire our OnAfterCreated/OnBeforeClose
+  // for the wrong browser and stomp browser_, taking the real tab down with it.
+  bool OnBeforePopup(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
+                     int popup_id, const CefString& target_url,
+                     const CefString& target_frame_name,
+                     CefLifeSpanHandler::WindowOpenDisposition target_disposition,
+                     bool user_gesture, const CefPopupFeatures& popup_features,
+                     CefWindowInfo& window_info, CefRefPtr<CefClient>& client,
+                     CefBrowserSettings& settings,
+                     CefRefPtr<CefDictionaryValue>& extra_info,
+                     bool* no_javascript_access) override;
   void OnAfterCreated(CefRefPtr<CefBrowser> browser) override;
   void OnBeforeClose(CefRefPtr<CefBrowser> browser) override;
 
