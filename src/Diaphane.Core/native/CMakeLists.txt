@@ -33,7 +33,8 @@ target_include_directories(DiaphaneCore PRIVATE
     "${DIAPHANE_CEF_SDK}")               # for "include/cef_*.h" and "libcef_dll/..."
 target_link_libraries(DiaphaneCore PRIVATE
     libcef_dll_wrapper
-    "${DIAPHANE_CEF_SDK}/Release/libcef.dll.lib")
+    "${DIAPHANE_CEF_SDK}/Release/libcef.dll.lib"
+    Shell32 Ole32)   # SHGetKnownFolderPath / CoTaskMemFree (default download dir)
 
 # --- CEF sub-process host ---
 add_executable(diaphane_helper WIN32 helper/helper.cc)

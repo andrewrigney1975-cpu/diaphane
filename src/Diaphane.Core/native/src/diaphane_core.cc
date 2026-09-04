@@ -24,6 +24,8 @@
 
 #if defined(_WIN32)
 #include <windows.h>
+#include <shlobj.h>
+#include <knownfolders.h>
 #endif
 
 namespace {
@@ -88,7 +90,25 @@ CefRefPtr<CefBrowser> LookupBrowser(const char* id) {
 
 }  // namespace
 
-std::string DcDefaultDownloadDir() { return g_default_download_dir; }
+std::string DcDefaultDownloadDir() {
+  if (!g_default_download_dir.empty()) return g_default_download_dir;
+#if defined(_WIN32)
+  // No override configured — resolve the real (possibly user-relocated) OS Downloads
+  // folder rather than leaving OnBeforeDownload to hand CEF a bare, directory-less path.
+  PWSTR wpath = nullptr;
+  if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_Downloads, 0, nullptr, &wpath)) && wpath) {
+    int len = ::WideCharToMultiByte(CP_UTF8, 0, wpath, -1, nullptr, 0, nullptr, nullptr);
+    std::string result;
+    if (len > 0) {
+      result.resize(static_cast<size_t>(len) - 1);
+      ::WideCharToMultiByte(CP_UTF8, 0, wpath, -1, result.data(), len, nullptr, nullptr);
+    }
+    ::CoTaskMemFree(wpath);
+    if (!result.empty()) return result + "\\";
+  }
+#endif
+  return std::string();
+}
 
 extern "C" {
 

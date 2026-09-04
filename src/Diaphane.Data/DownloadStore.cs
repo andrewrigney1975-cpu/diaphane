@@ -47,10 +47,11 @@ public sealed class DownloadStore : IDisposable
         return (long)(cmd.ExecuteScalar() ?? 0L);
     }
 
-    public void UpdateProgress(long id, long receivedBytes, long totalBytes, DownloadState state)
+    public void UpdateProgress(long id, string filePath, long receivedBytes, long totalBytes, DownloadState state)
     {
         using var cmd = _db.CreateCommand();
-        cmd.CommandText = "UPDATE downloads SET received_bytes=$r, total_bytes=$tot, state=$st WHERE id=$id";
+        cmd.CommandText = "UPDATE downloads SET file_path=$p, received_bytes=$r, total_bytes=$tot, state=$st WHERE id=$id";
+        cmd.Parameters.AddWithValue("$p", filePath);
         cmd.Parameters.AddWithValue("$r", receivedBytes);
         cmd.Parameters.AddWithValue("$tot", totalBytes);
         cmd.Parameters.AddWithValue("$st", (int)state);

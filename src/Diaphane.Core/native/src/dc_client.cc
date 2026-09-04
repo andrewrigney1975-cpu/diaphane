@@ -145,7 +145,7 @@ int32_t DownloadStateOf(CefRefPtr<CefDownloadItem> item) {
 }
 }  // namespace
 
-void DcClient::OnBeforeDownload(CefRefPtr<CefBrowser> browser,
+bool DcClient::OnBeforeDownload(CefRefPtr<CefBrowser> browser,
                                 CefRefPtr<CefDownloadItem> download_item,
                                 const CefString& suggested_name,
                                 CefRefPtr<CefBeforeDownloadCallback> callback) {
@@ -154,6 +154,7 @@ void DcClient::OnBeforeDownload(CefRefPtr<CefBrowser> browser,
   std::string path = dir.empty() ? name : dir + name;
   // show_dialog=false: no native window to parent a Save As dialog to (OSR).
   callback->Continue(path, /*show_dialog=*/false);
+  return true;  // returning false (the default) silently drops the download
 }
 
 void DcClient::OnDownloadUpdated(CefRefPtr<CefBrowser> browser,

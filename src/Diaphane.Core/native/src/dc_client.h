@@ -92,7 +92,7 @@ class DcClient : public CefClient,
                     CefRefPtr<CefFileDialogCallback> callback) override;
 
   // CefDownloadHandler
-  void OnBeforeDownload(CefRefPtr<CefBrowser> browser,
+  bool OnBeforeDownload(CefRefPtr<CefBrowser> browser,
                         CefRefPtr<CefDownloadItem> download_item,
                         const CefString& suggested_name,
                         CefRefPtr<CefBeforeDownloadCallback> callback) override;

@@ -546,7 +546,7 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
 
         var state = (Diaphane.Data.DownloadState)(int)p.State;
         if (_downloadRowByNativeId.TryGetValue(p.NativeId, out var rowId))
-            _downloads.UpdateProgress(rowId, p.ReceivedBytes, p.TotalBytes, state);
+            _downloads.UpdateProgress(rowId, p.FilePath, p.ReceivedBytes, p.TotalBytes, state);
         else
             _downloadRowByNativeId[p.NativeId] =
                 _downloads.Start(p.Url, p.FileName, p.FilePath, p.TotalBytes);
