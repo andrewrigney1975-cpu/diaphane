@@ -36,12 +36,13 @@ public class DownloadStoreTests
         {
             var id = store.Start("https://example.com/file.zip", "file.zip", "C:\\Downloads\\file.zip", 1000);
 
-            store.UpdateProgress(id, "C:\\Downloads\\file.zip", 1000, 1000, DownloadState.Complete);
+            store.UpdateProgress(id, "file.zip", "C:\\Downloads\\file.zip", 1000, 1000, DownloadState.Complete);
 
             var got = Assert.Single(store.Recent());
             Assert.Equal(1000, got.ReceivedBytes);
             Assert.Equal(DownloadState.Complete, got.State);
             Assert.Equal("C:\\Downloads\\file.zip", got.FilePath);
+            Assert.Equal("file.zip", got.FileName);
         }
         finally
         {

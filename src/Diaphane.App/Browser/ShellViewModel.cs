@@ -548,14 +548,34 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     {
         if (tab.IsSandbox) return;
 
+        // CEF's "suggested" filename is reliable in OnBeforeDownload but comes back empty
+        // on the OnDownloadUpdated progress events this is actually built from — fall back
+        // to the resolved file path's own name, then the URL, rather than storing blank.
+        var fileName = ResolveFileName(p.FileName, p.FilePath, p.Url);
         var state = (Diaphane.Data.DownloadState)(int)p.State;
         if (_downloadRowByNativeId.TryGetValue(p.NativeId, out var rowId))
-            _downloads.UpdateProgress(rowId, p.FilePath, p.ReceivedBytes, p.TotalBytes, state);
+            _downloads.UpdateProgress(rowId, fileName, p.FilePath, p.ReceivedBytes, p.TotalBytes, state);
         else
             _downloadRowByNativeId[p.NativeId] =
-                _downloads.Start(p.Url, p.FileName, p.FilePath, p.TotalBytes);
+                _downloads.Start(p.Url, fileName, p.FilePath, p.TotalBytes);
 
         RefreshDownloads();
+    }
+
+    private static string ResolveFileName(string suggested, string filePath, string url)
+    {
+        if (!string.IsNullOrWhiteSpace(suggested)) return suggested;
+        if (!string.IsNullOrWhiteSpace(filePath))
+        {
+            var name = Path.GetFileName(filePath);
+            if (!string.IsNullOrWhiteSpace(name)) return name;
+        }
+        if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            var name = Path.GetFileName(uri.LocalPath);
+            if (!string.IsNullOrWhiteSpace(name)) return Uri.UnescapeDataString(name);
+        }
+        return "download";
     }
 
     private void RefreshDownloads()

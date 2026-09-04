@@ -148,6 +148,15 @@ public sealed partial class MainWindow : Window
     public static double DownloadPercent(long received, long total) =>
         total > 0 ? Math.Clamp(received * 100.0 / total, 0, 100) : 0;
 
+    public static string FormatDownloadTime(DateTimeOffset startedAt)
+    {
+        var local = startedAt.ToLocalTime();
+        var today = DateTimeOffset.Now.Date;
+        return local.Date == today
+            ? local.ToString("t")             // "3:45 PM"
+            : local.ToString("d MMM yyyy, t"); // "4 Sep 2026, 3:45 PM"
+    }
+
     public static Visibility VisIfInProgress(Diaphane.Data.DownloadState state) =>
         state == Diaphane.Data.DownloadState.InProgress ? Visibility.Visible : Visibility.Collapsed;
 
