@@ -12,6 +12,8 @@ public sealed class CefHost : IDisposable
 {
     private readonly DispatcherQueue _dispatcher;
     private readonly DispatcherQueueTimer _pumpTimer;
+    private readonly DispatcherQueueTimer _heartbeatTimer;   // MUST stay rooted — a
+    // collected DispatcherQueueTimer stops firing, which silently kills the CEF pump.
 
     public CefEngine Engine { get; }
 
@@ -47,11 +49,11 @@ public sealed class CefHost : IDisposable
         // A steady heartbeat keeps CEF responsive even when OnScheduleMessagePumpWork
         // is quiet (and is essential during browser creation — the render-process
         // handshake times out if the loop is starved).
-        var heartbeat = _dispatcher.CreateTimer();
-        heartbeat.Interval = TimeSpan.FromMilliseconds(33);
-        heartbeat.IsRepeating = true;
-        heartbeat.Tick += (_, _) => Engine.DoMessageLoopWork();
-        heartbeat.Start();
+        _heartbeatTimer = _dispatcher.CreateTimer();
+        _heartbeatTimer.Interval = TimeSpan.FromMilliseconds(33);
+        _heartbeatTimer.IsRepeating = true;
+        _heartbeatTimer.Tick += (_, _) => Engine.DoMessageLoopWork();
+        _heartbeatTimer.Start();
     }
 
     public void Dispose() => Engine.Dispose();

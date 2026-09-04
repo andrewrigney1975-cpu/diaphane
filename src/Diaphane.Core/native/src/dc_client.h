@@ -4,6 +4,7 @@
 #include <string>
 
 #include "include/cef_client.h"
+#include "include/cef_jsdialog_handler.h"
 #include "include/diaphane_core.h"
 
 // One DcClient per browser view. Forwards the handful of CEF events the shell
@@ -12,6 +13,7 @@ class DcClient : public CefClient,
                  public CefLifeSpanHandler,
                  public CefLoadHandler,
                  public CefDisplayHandler,
+                 public CefJSDialogHandler,
                  public CefRenderHandler {
  public:
   DcClient(std::string view_id, dc_view_callbacks cb, int width, int height);
@@ -25,6 +27,7 @@ class DcClient : public CefClient,
   CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override { return this; }
   CefRefPtr<CefLoadHandler> GetLoadHandler() override { return this; }
   CefRefPtr<CefDisplayHandler> GetDisplayHandler() override { return this; }
+  CefRefPtr<CefJSDialogHandler> GetJSDialogHandler() override { return this; }
   CefRefPtr<CefRenderHandler> GetRenderHandler() override { return this; }
 
   // CefLifeSpanHandler
@@ -41,6 +44,17 @@ class DcClient : public CefClient,
   void OnTitleChange(CefRefPtr<CefBrowser> browser, const CefString& title) override;
   void OnFaviconURLChange(CefRefPtr<CefBrowser> browser,
                           const std::vector<CefString>& icon_urls) override;
+
+  // CefJSDialogHandler — no native dialog UI (OSR). Auto-dismiss page dialogs and
+  // let navigations proceed past beforeunload prompts.
+  bool OnJSDialog(CefRefPtr<CefBrowser> browser, const CefString& origin_url,
+                  JSDialogType dialog_type, const CefString& message_text,
+                  const CefString& default_prompt_text,
+                  CefRefPtr<CefJSDialogCallback> callback,
+                  bool& suppress_message) override;
+  bool OnBeforeUnloadDialog(CefRefPtr<CefBrowser> browser,
+                            const CefString& message_text, bool is_reload,
+                            CefRefPtr<CefJSDialogCallback> callback) override;
 
   // CefRenderHandler (windowless / OSR)
   void GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rect) override;

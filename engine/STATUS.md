@@ -196,3 +196,30 @@ context disposed on last close).
 
 Tests: 13/13 `Diaphane.Shell.Tests` green. App builds with VS 18 MSBuild, runs, renders
 DuckDuckGo with the full M4/M5/M6 chrome (`%TEMP%\diaphane-shot*.png`).
+
+---
+
+# Bugfix — navigation after the first hangs forever
+
+Symptom: type a URL, hit Enter, the load bar animates but the page never
+changes. Only the *first* page load (the one at startup) worked.
+
+Root cause: in `CefHost` the steady 33 ms pump `heartbeat` timer was a **local
+variable**, not a field. Nothing rooted it, so the GC collected it — and a
+collected `DispatcherQueueTimer` silently stops firing. The first navigation
+allocates enough (SQLite, marshalling, event args) to trigger a GC; the
+heartbeat dies; `CefDoMessageLoopWork()` stops being called; every subsequent
+navigation commits (`OnLoadStart`) but then stalls because CEF's UI-thread work
+is never pumped. Fix: hold it in a field (`_heartbeatTimer`).
+
+Also added while chasing it (both worth keeping):
+- `dc_pump` now guards against reentrant `CefDoMessageLoopWork()` (CEF forbids it).
+- `DcClient` implements `CefJSDialogHandler` — OSR has no dialog surface, so
+  `OnBeforeUnloadDialog` auto-continues (a page with `onbeforeunload` would
+  otherwise wedge navigation) and `OnJSDialog` auto-dismisses.
+
+Note: a hard `Process.Kill()` (as the dev screenshot loop was doing) never lets
+CEF close its block-file HTTP cache cleanly and corrupts it
+(`backend_impl.cc:1869 Destroying invalid entry` flood). Delete
+`%LOCALAPPDATA%\Diaphane\UserData\Default\Cache` if that happens; normal
+window-close shuts down cleanly via `Engine.Dispose()`.

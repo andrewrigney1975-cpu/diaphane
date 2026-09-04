@@ -130,8 +130,7 @@ public sealed partial class MainWindow : Window
                     (uint)rtb.PixelWidth, (uint)rtb.PixelHeight, 96, 96, px);
                 await enc.FlushAsync();
                 File.AppendAllText(Path.Combine(Path.GetTempPath(), "diaphane-app.log"),
-                    $"{DateTime.Now:o} selfshot {i}: {rtb.PixelWidth}x{rtb.PixelHeight} nonBlackPx={nonBlack} " +
-                    $"tab='{Vm.ActiveTab?.Title}' url='{Vm.ActiveTab?.Url}'\n");
+                    $"{DateTime.Now:o} selfshot {i}: {rtb.PixelWidth}x{rtb.PixelHeight} nonBlackPx={nonBlack}\n");
             }
             catch (Exception ex)
             {

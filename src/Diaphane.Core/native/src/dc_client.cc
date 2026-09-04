@@ -57,6 +57,28 @@ void DcClient::OnFaviconURLChange(CefRefPtr<CefBrowser> browser,
     cb_.on_favicon(view_id_.c_str(), icon_urls.front().ToString().c_str(), cb_.user);
 }
 
+bool DcClient::OnJSDialog(CefRefPtr<CefBrowser> browser, const CefString& origin_url,
+                          JSDialogType dialog_type, const CefString& message_text,
+                          const CefString& default_prompt_text,
+                          CefRefPtr<CefJSDialogCallback> callback,
+                          bool& suppress_message) {
+  // We render off-screen with no dialog surface. Suppress the prompt and treat
+  // it as dismissed (alert = ok, confirm/prompt = cancel) so a page can never
+  // wedge the UI thread waiting on a dialog that can't be shown.
+  suppress_message = true;
+  callback->Continue(dialog_type == JSDIALOGTYPE_ALERT, CefString());
+  return true;
+}
+
+bool DcClient::OnBeforeUnloadDialog(CefRefPtr<CefBrowser> browser,
+                                    const CefString& message_text, bool is_reload,
+                                    CefRefPtr<CefJSDialogCallback> callback) {
+  // Always allow the navigation / reload to proceed — without this, navigating
+  // away from any page that registers `onbeforeunload` hangs in OSR mode.
+  callback->Continue(true, CefString());
+  return true;
+}
+
 void DcClient::GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rect) {
   rect.Set(0, 0, width_ > 0 ? width_ : 1280, height_ > 0 ? height_ : 800);
 }

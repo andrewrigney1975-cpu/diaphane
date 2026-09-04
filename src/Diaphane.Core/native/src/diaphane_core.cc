@@ -144,7 +144,14 @@ int32_t dc_initialize(const dc_settings* s,
 }
 
 void dc_pump(void) {
-  if (g_initialized) CefDoMessageLoopWork();
+  if (!g_initialized) return;
+  // Never call CefDoMessageLoopWork() reentrantly (CEF forbids it) — a CEF
+  // callback dispatched from here can pump the host loop and land back in dc_pump.
+  static bool in_pump = false;
+  if (in_pump) return;
+  in_pump = true;
+  CefDoMessageLoopWork();
+  in_pump = false;
 }
 
 void dc_shutdown(void) {
