@@ -60,6 +60,7 @@ internal static partial class NativeMethods
         public int NoSandbox;
         [MarshalAs(UnmanagedType.LPUTF8Str)] public string? ExtensionDirs;
         public int AllowWidevine;
+        public int Devtools;
     }
 
     // Structs with string / delegate fields aren't supported by [LibraryImport] source-gen;
@@ -135,12 +136,8 @@ internal static partial class NativeMethods
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void dc_view_invalidate(string viewId);
 
-    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial void dc_view_show_devtools(string viewId, int elementX, int elementY);
-    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial void dc_view_close_devtools(string viewId);
-    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial int dc_view_has_devtools(string viewId);
+    [LibraryImport(Dll)]
+    internal static partial int dc_devtools_port();
 
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
     internal delegate void EvalCb(

@@ -141,20 +141,47 @@
             </ScrollViewer>
         </Border>
 
-        <!-- CEF off-screen surface -->
-        <Grid x:Name="BrowserRegion" Grid.Row="3"
-              Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-              SizeChanged="OnBrowserRegionChanged">
-            <Image x:Name="BrowserImage" Stretch="None"
-                   HorizontalAlignment="Left" VerticalAlignment="Top"
-                   IsTabStop="True" ManipulationMode="None"
-                   PointerMoved="OnPointerMoved" PointerPressed="OnPointerPressed"
-                   PointerReleased="OnPointerReleased" PointerExited="OnPointerExited"
-                   PointerWheelChanged="OnPointerWheel"
-                   KeyDown="OnKeyDown" KeyUp="OnKeyUp" CharacterReceived="OnChar" />
+        <!-- CEF off-screen surface + docked DevTools pane -->
+        <Grid Grid.Row="3">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition x:Name="DevToolsColumn" Width="0" />
+            </Grid.ColumnDefinitions>
+
+            <Grid x:Name="BrowserRegion" Grid.Column="0"
+                  Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                  SizeChanged="OnBrowserRegionChanged">
+                <Image x:Name="BrowserImage" Stretch="None"
+                       HorizontalAlignment="Left" VerticalAlignment="Top"
+                       IsTabStop="True" ManipulationMode="None"
+                       PointerMoved="OnPointerMoved" PointerPressed="OnPointerPressed"
+                       PointerReleased="OnPointerReleased" PointerExited="OnPointerExited"
+                       PointerWheelChanged="OnPointerWheel"
+                       KeyDown="OnKeyDown" KeyUp="OnKeyUp" CharacterReceived="OnChar" />
+                <ProgressBar x:Name="LoadBar" VerticalAlignment="Top" IsIndeterminate="True"
+                             Visibility="Collapsed" />
+            </Grid>
+
+            <Border x:Name="DevToolsSplitter" Grid.Column="1" Width="6"
+                    Background="{ThemeResource DividerStrokeColorDefaultBrush}"
+                    Visibility="Collapsed"
+                    PointerPressed="OnDevSplitterPressed"
+                    PointerMoved="OnDevSplitterMoved"
+                    PointerReleased="OnDevSplitterReleased" />
+
+            <Grid x:Name="DevToolsRegion" Grid.Column="2"
+                  Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                  SizeChanged="OnDevToolsRegionChanged">
+                <Image x:Name="DevToolsImage" Stretch="None"
+                       HorizontalAlignment="Left" VerticalAlignment="Top"
+                       IsTabStop="True" ManipulationMode="None"
+                       PointerMoved="OnDevPointerMoved" PointerPressed="OnDevPointerPressed"
+                       PointerReleased="OnDevPointerReleased" PointerExited="OnDevPointerExited"
+                       PointerWheelChanged="OnDevPointerWheel"
+                       KeyDown="OnDevKeyDown" KeyUp="OnDevKeyUp" CharacterReceived="OnDevChar" />
+            </Grid>
         </Grid>
-        <ProgressBar x:Name="LoadBar" Grid.Row="3" VerticalAlignment="Top" IsIndeterminate="True"
-                     Visibility="Collapsed" />
 
         <!-- diaphane://privacy — Clear browsing data -->
         <Grid Grid.Row="3" Background="#99000000"
@@ -201,6 +228,10 @@
                     <CheckBox IsChecked="{x:Bind Vm.Privacy.AllowWidevine, Mode=TwoWay}">
                         <TextBlock TextWrapping="Wrap"
                                    Text="Allow the Widevine DRM module (off by default). Even when on, diaphane never downloads it — DRM video only works if the module is already present. Takes effect on restart." />
+                    </CheckBox>
+                    <CheckBox IsChecked="{x:Bind Vm.Privacy.EnableDevTools, Mode=TwoWay}">
+                        <TextBlock TextWrapping="Wrap"
+                                   Text="Enable DevTools (F12). Uses a 127.0.0.1-only debugging port. Turn off to close that port entirely. Takes effect on restart." />
                     </CheckBox>
                 </StackPanel>
             </Border>

@@ -20,6 +20,13 @@ public sealed class PrivacySettings
     /// <em>if it is already present</em> — it is never downloaded. Applied at launch.
     /// </summary>
     public bool EnableWidevine { get; set; }
+
+    /// <summary>
+    /// The docked DevTools pane loads its front-end from a loopback
+    /// (127.0.0.1) debugging endpoint. On by default; turn off to close that
+    /// port entirely (DevTools then unavailable). Applied at launch.
+    /// </summary>
+    public bool EnableDevTools { get; set; } = true;
 }
 
 /// <summary>Reads/writes <see cref="PrivacySettings"/> as a single JSON file. Never throws.</summary>

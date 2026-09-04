@@ -13,7 +13,8 @@ public sealed record CefEngineOptions(
     bool NoSandbox = false,
     string? UserAgent = null,
     IReadOnlyList<string>? ExtensionDirs = null,
-    bool AllowWidevine = false);
+    bool AllowWidevine = false,
+    bool EnableDevTools = true);
 
 /// <summary>
 /// The real <see cref="IBrowserEngine"/> — a thin managed shell over DiaphaneCore.dll.
@@ -42,6 +43,7 @@ public sealed class CefEngine : IBrowserEngine, IDisposable
             NoSandbox = o.NoSandbox ? 1 : 0,
             ExtensionDirs = o.ExtensionDirs is { Count: > 0 } dirs ? string.Join(';', dirs) : null,
             AllowWidevine = o.AllowWidevine ? 1 : 0,
+            Devtools = o.EnableDevTools ? 1 : 0,
         };
 
         if (dc_initialize(settings, _pumpCb, IntPtr.Zero) == 0)
@@ -68,10 +70,55 @@ public sealed class CefEngine : IBrowserEngine, IDisposable
     public IBrowserView CreateView(IRequestContext context, nint hostHwnd)
     {
         var ctxId = ((CefRequestContext)context).Id2;
-        var view = new CefBrowserView(ctxId, hostHwnd);
+        return Register(new CefBrowserView(ctxId, hostHwnd) { Engine = this });
+    }
+
+    /// <summary>A plain windowless view on the global context — used for the DevTools front-end pane.</summary>
+    internal CefBrowserView CreateRawView(int width, int height) =>
+        Register(new CefBrowserView("", IntPtr.Zero, width, height) { Engine = this });
+
+    private CefBrowserView Register(CefBrowserView view)
+    {
         _views[view.NativeId] = view;
         view.Closed += (_, _) => _views.TryRemove(view.NativeId, out _);
         return view;
+    }
+
+    /// <summary>
+    /// Resolve the DevTools front-end URL for the page currently at
+    /// <paramref name="inspectedUrl"/> via the loopback debugging endpoint.
+    /// Best-effort and synchronous (short timeout); returns null if unavailable.
+    /// </summary>
+    internal string? ResolveDevToolsFrontendUrl(string inspectedUrl)
+    {
+        var port = dc_devtools_port();
+        if (port <= 0) return null;
+        try
+        {
+            using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(3) };
+            var json = http.GetStringAsync($"http://127.0.0.1:{port}/json/list").GetAwaiter().GetResult();
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+
+            System.Text.Json.JsonElement? pick = null;
+            foreach (var t in doc.RootElement.EnumerateArray())
+            {
+                if (t.TryGetProperty("type", out var ty) && ty.GetString() != "page") continue;
+                pick ??= t;   // fall back to the first page target
+                if (t.TryGetProperty("url", out var u) && u.GetString() == inspectedUrl) { pick = t; break; }
+            }
+            if (pick is not { } target) return null;
+
+            var fe = target.TryGetProperty("devtoolsFrontendUrl", out var feEl) ? feEl.GetString() : null;
+            var ws = target.TryGetProperty("webSocketDebuggerUrl", out var wsEl) ? wsEl.GetString() : null;
+            if (string.IsNullOrEmpty(fe) && !string.IsNullOrEmpty(ws))
+                fe = $"/devtools/inspector.html?ws={ws!["ws://".Length..]}";
+            if (string.IsNullOrEmpty(fe)) return null;
+            return fe!.StartsWith("http") ? fe : $"http://127.0.0.1:{port}{fe}";
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     public void Dispose()

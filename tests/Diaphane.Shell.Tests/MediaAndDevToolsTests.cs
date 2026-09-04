@@ -69,15 +69,28 @@ public sealed class DevToolsTabTests
     }
 
     [Fact]
-    public void ToggleDevTools_opens_then_closes()
+    public async Task OpenDevTools_then_close_tracks_state()
     {
         var tab = NewTab(out var view);
 
-        tab.ToggleDevTools();
+        var dt = await tab.OpenDevToolsAsync(800, 600);
+        Assert.NotNull(dt);
         Assert.True(view.DevToolsOpen);
+        Assert.True(tab.HasDevTools);
+        Assert.Same(dt, tab.DevToolsView);
 
-        tab.ToggleDevTools();
+        tab.CloseDevTools();
         Assert.False(view.DevToolsOpen);
+        Assert.Null(tab.DevToolsView);
+    }
+
+    [Fact]
+    public async Task OpenDevTools_is_idempotent()
+    {
+        var tab = NewTab(out _);
+        var a = await tab.OpenDevToolsAsync(800, 600);
+        var b = await tab.OpenDevToolsAsync(400, 300);
+        Assert.Same(a, b);
     }
 
     [Fact]

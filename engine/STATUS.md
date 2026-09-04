@@ -293,3 +293,31 @@ available, Widevine/PlayReady not available.
 downloaded** — the toggle only permits an already-present CDM. Applied at launch.
 
 Tests: `MediaProbe` parse + `TabModel` devtools/eval — 35 shell tests green.
+
+---
+
+# M9 — DevTools: docked right-hand pane (revised)
+
+The first cut opened `CefBrowserHost::ShowDevTools` in a popup / windowless view;
+with the **Chrome runtime** that renders blank (OSR DevTools is an Alloy-runtime
+feature). Reworked to a docked pane:
+
+- `dc_settings.devtools` → `DcApp` adds `--remote-debugging-port=0`
+  `--remote-debugging-address=127.0.0.1` `--remote-allow-origins=*`. Ephemeral
+  port, **loopback only**, written to `<cache>/DevToolsActivePort`.
+- `dc_devtools_port()` reads that file. `CefEngine.ResolveDevToolsFrontendUrl`
+  does one `GET http://127.0.0.1:<port>/json/list` (on a background thread — the
+  handler needs the UI/pump thread free), matches the page target by URL, and
+  returns its `devtoolsFrontendUrl`.
+- `CefBrowserView.OpenDevToolsAsync` creates a second windowless view
+  (`CefEngine.CreateRawView`) and navigates it to that front-end URL — so the
+  DevTools frontend renders as an ordinary OSR page.
+- `MainWindow`: a 3-column browser row (page | drag splitter | DevTools pane).
+  `CefSurface` was extracted so the page and the DevTools pane share the same
+  BGRA-blit + input-forwarding code. F12 / Ctrl+Shift+I toggle it.
+- Verified: full Elements/Console/Styles UI, live DOM of the inspected tab,
+  resizable pane.
+
+`PrivacySettings.EnableDevTools` (default **on**) gates the whole loopback port;
+turning it off in the privacy panel closes it (applied at launch), alongside the
+Widevine toggle.

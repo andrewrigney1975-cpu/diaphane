@@ -7,6 +7,7 @@
 #include "include/diaphane_core.h"
 
 #include <atomic>
+#include <fstream>
 #include <string>
 #include <unordered_map>
 
@@ -30,6 +31,7 @@ namespace {
 CefRefPtr<DcApp> g_app;
 bool g_initialized = false;
 int g_windowless = 0;
+std::string g_root_cache;
 std::atomic<uint64_t> g_next_id{1};
 
 std::unordered_map<std::string, CefRefPtr<CefRequestContext>> g_contexts;
@@ -104,6 +106,8 @@ int32_t dc_initialize(const dc_settings* s,
   if (s->extension_dirs && *s->extension_dirs)
     g_app->SetExtensionDirs(s->extension_dirs);
   g_app->SetWidevineAllowed(s->allow_widevine != 0);
+  g_app->SetDevToolsEnabled(s->devtools != 0);
+  if (s->root_cache_dir) g_root_cache = s->root_cache_dir;
 
   // Even in the browser process CEF wants this called first (early init). It
   // returns >= 0 only when this process is actually a sub-process, which it
@@ -413,36 +417,14 @@ void dc_view_key(const char* view_id, int32_t is_down, int32_t windows_key_code,
   b->GetHost()->SendKeyEvent(ke);
 }
 
-namespace {
-// DevTools opens in its own top-level window; it needs a client but we don't
-// care about its events. One shared empty client is enough.
-class DcDevToolsClient : public CefClient {
-  IMPLEMENT_REFCOUNTING(DcDevToolsClient);
-};
-CefRefPtr<CefClient> g_devtools_client;
-}  // namespace
-
-void dc_view_show_devtools(const char* view_id, int32_t x, int32_t y) {
-  auto c = LookupView(view_id);
-  auto b = c ? c->browser() : nullptr;
-  if (!b) return;
-  if (!g_devtools_client) g_devtools_client = new DcDevToolsClient();
-
-  CefWindowInfo wi;
-#if defined(_WIN32)
-  wi.SetAsPopup(nullptr, "DevTools — diaphane");
-#endif
-  CefBrowserSettings settings;
-  b->GetHost()->ShowDevTools(wi, g_devtools_client, settings, CefPoint(x, y));
-}
-
-void dc_view_close_devtools(const char* view_id) {
-  if (auto b = LookupBrowser(view_id)) b->GetHost()->CloseDevTools();
-}
-
-int32_t dc_view_has_devtools(const char* view_id) {
-  auto b = LookupBrowser(view_id);
-  return b && b->GetHost()->HasDevTools() ? 1 : 0;
+int32_t dc_devtools_port(void) {
+  if (!g_initialized || g_root_cache.empty()) return 0;
+  std::string path = g_root_cache + "\\DevToolsActivePort";
+  std::ifstream f(path);
+  if (!f) return 0;
+  int port = 0;
+  f >> port;                 // first line is the port; second line is the ws path
+  return port > 0 ? port : 0;
 }
 
 int32_t dc_view_eval_js(const char* view_id, const char* script,

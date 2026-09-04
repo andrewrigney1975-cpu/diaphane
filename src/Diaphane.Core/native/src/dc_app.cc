@@ -39,6 +39,15 @@ void DcApp::OnBeforeCommandLineProcessing(const CefString& process_type,
     command_line->AppendSwitch("disable-session-crashed-bubble");
     command_line->AppendSwitch("hide-crash-restore-bubble");
 
+    if (devtools_enabled_) {
+      // Loopback only. Ephemeral port -> written to <cache>/DevToolsActivePort.
+      // The docked DevTools pane loads the front-end from this endpoint; without
+      // it the Chrome runtime only offers a separate top-level DevTools window.
+      command_line->AppendSwitchWithValue("remote-debugging-port", "0");
+      command_line->AppendSwitchWithValue("remote-debugging-address", "127.0.0.1");
+      command_line->AppendSwitchWithValue("remote-allow-origins", "*");
+    }
+
     // Unpacked extensions the user explicitly loaded (M8). Comma-separated for
     // Chromium; we store them ';'-separated. No update_url is ever contacted —
     // extension update checks are user-initiated only (see CLAUDE.md).

@@ -47,10 +47,20 @@ public sealed class TabModel : INotifyPropertyChanged
     public void Forward() => _view.GoForward();
     public void SetBounds(int x, int y, int width, int height) => _view.SetBounds(x, y, width, height);
 
-    public void ToggleDevTools()
+    /// <summary>The off-screen DevTools view for this tab, when open (shell renders it in a pane).</summary>
+    public IOffscreenBrowserView? DevToolsView { get; private set; }
+    public bool HasDevTools => Offscreen?.HasDevTools ?? false;
+
+    public async Task<IOffscreenBrowserView?> OpenDevToolsAsync(int width, int height)
     {
-        if (_view.HasDevTools) _view.CloseDevTools();
-        else _view.ShowDevTools();
+        DevToolsView = Offscreen is { } osr ? await osr.OpenDevToolsAsync(width, height) : null;
+        return DevToolsView;
+    }
+
+    public void CloseDevTools()
+    {
+        Offscreen?.CloseDevTools();
+        DevToolsView = null;
     }
 
     public Task<string> EvaluateJavaScriptAsync(string script) => _view.EvaluateJavaScriptAsync(script);

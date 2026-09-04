@@ -60,6 +60,7 @@ typedef struct dc_settings {
   int32_t     no_sandbox;        // 1 = disable the CEF sandbox (tests only)
   const char* extension_dirs;    // optional; ';'-separated unpacked-extension dirs to --load-extension
   int32_t     allow_widevine;    // 1 = permit the Widevine CDM if present; 0 (default) hardens it off
+  int32_t     devtools;          // 1 = enable the loopback DevTools endpoint (--remote-debugging-port=0)
 } dc_settings;
 
 // ---- lifecycle ----
@@ -112,11 +113,9 @@ DC_API void dc_view_key(const char* view_id, int32_t is_down, int32_t windows_ke
 DC_API void dc_view_invalidate(const char* view_id);
 
 // ---- devtools ----
-// Opens DevTools in its own top-level window. element_x/element_y in view px,
-// or (0,0) for no "inspect element" target.
-DC_API void    dc_view_show_devtools(const char* view_id, int32_t element_x, int32_t element_y);
-DC_API void    dc_view_close_devtools(const char* view_id);
-DC_API int32_t dc_view_has_devtools(const char* view_id);
+// The port the loopback DevTools HTTP endpoint bound to (from
+// <cache>/DevToolsActivePort), or 0 if remote debugging is off / not ready yet.
+DC_API int32_t dc_devtools_port(void);
 
 // ---- script evaluation (via the DevTools protocol Runtime.evaluate) ----
 // The result JSON (the CDP "result" object, or an error) is delivered to |cb|

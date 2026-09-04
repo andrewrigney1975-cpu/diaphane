@@ -23,11 +23,8 @@ public sealed partial class MainWindow : Window
     private readonly ExtensionStore _extensions;
     public ShellViewModel Vm { get; }
 
-    private IOffscreenBrowserView? _view;
-    private WriteableBitmap? _bitmap;
-    private byte[] _frame = Array.Empty<byte>();
-    private int _pxW, _pxH;
-    private double _scale = 1.0;
+    private CefSurface _page = null!;
+    private CefSurface _dev = null!;
 
     public MainWindow()
     {
@@ -46,16 +43,19 @@ public sealed partial class MainWindow : Window
         _extensions = new ExtensionStore(Path.Combine(dataDir, "extensions.db"));
         var privacySettings = new Diaphane.Privacy.PrivacySettingsStore(Path.Combine(dataDir, "privacy.json")).Load();
         _cef = new CefHost(DispatcherQueue, CefHost.ResolveNativeBinDir(),
-            _extensions.EnabledPaths(), allowWidevine: privacySettings.EnableWidevine);
+            _extensions.EnabledPaths(), allowWidevine: privacySettings.EnableWidevine,
+            enableDevTools: privacySettings.EnableDevTools);
         Vm = new ShellViewModel(_cef.Engine, dataDir, _extensions);
         Vm.PropertyChanged += OnVmPropertyChanged;
         Vm.Tabs.CollectionChanged += (_, _) => SyncTabStrip();
+
+        _page = new CefSurface(BrowserImage, BrowserRegion);
+        _dev = new CefSurface(DevToolsImage, DevToolsRegion);
 
         Root.Loaded += (_, _) =>
         {
             try
             {
-                _scale = Root.XamlRoot?.RasterizationScale ?? 1.0;
                 Vm.Start(0);
                 SyncTabStrip();
                 AttachActiveView();
@@ -193,21 +193,47 @@ public sealed partial class MainWindow : Window
             case nameof(ShellViewModel.IsLoading):
                 LoadBar.Visibility = Vm.IsLoading ? Visibility.Visible : Visibility.Collapsed;
                 break;
+            case nameof(ShellViewModel.ShowDevTools):
+                UpdateDevToolsPane();
+                break;
         }
     }
 
     // ---- surface wiring ----
     private void AttachActiveView()
     {
-        var next = Vm.ActiveTab?.Offscreen;
-        if (ReferenceEquals(next, _view)) return;
-        if (_view is not null) _view.FramePainted -= OnFramePainted;
-        _view = next;
-        if (_view is not null)
+        _page.Attach(Vm.ActiveTab?.Offscreen);
+        // DevTools belongs to a specific tab — drop it when switching tabs.
+        if (Vm.ShowDevTools) Vm.ShowDevTools = false;
+    }
+
+    private async void UpdateDevToolsPane()
+    {
+        if (Vm.ShowDevTools && Vm.ActiveTab is { } tab)
         {
-            _view.FramePainted += OnFramePainted;
-            ResizeSurface();
-            _view.Invalidate();   // force a full repaint of the newly-shown tab's surface
+            if (DevToolsColumn.Width.Value < 1)
+                DevToolsColumn.Width = new GridLength(Math.Max(360, Root.ActualWidth * 0.42));
+            DevToolsSplitter.Visibility = Visibility.Visible;
+            Root.UpdateLayout();   // give the pane a real size before we ask CEF to render into it
+
+            var scale = Root.XamlRoot?.RasterizationScale ?? 1.0;
+            var dt = await tab.OpenDevToolsAsync(
+                (int)Math.Round(DevToolsRegion.ActualWidth * scale),
+                (int)Math.Round(DevToolsRegion.ActualHeight * scale));
+
+            if (dt is null || !Vm.ShowDevTools)   // resolve failed or user closed while we waited
+            {
+                Vm.ShowDevTools = false;
+                return;
+            }
+            _dev.Attach(dt);
+        }
+        else
+        {
+            _dev.Attach(null);
+            Vm.ActiveTab?.CloseDevTools();
+            DevToolsSplitter.Visibility = Visibility.Collapsed;
+            DevToolsColumn.Width = new GridLength(0);
         }
     }
 
@@ -234,108 +260,48 @@ public sealed partial class MainWindow : Window
             Vm.RemoveBookmarkCommand.Execute(b);
     }
 
-    private void OnBrowserRegionChanged(object sender, SizeChangedEventArgs e) => ResizeSurface();
+    // ---- page surface (delegates to CefSurface) ----
+    private void OnBrowserRegionChanged(object sender, SizeChangedEventArgs e) => _page.Resize();
+    private void OnPointerMoved(object sender, PointerRoutedEventArgs e) => _page.PointerMoved(e);
+    private void OnPointerExited(object sender, PointerRoutedEventArgs e) => _page.PointerExited(e);
+    private void OnPointerPressed(object sender, PointerRoutedEventArgs e) => _page.PointerPressed(e);
+    private void OnPointerReleased(object sender, PointerRoutedEventArgs e) => _page.PointerReleased(e);
+    private void OnPointerWheel(object sender, PointerRoutedEventArgs e) => _page.PointerWheel(e);
+    private void OnKeyDown(object sender, KeyRoutedEventArgs e) => _page.KeyDown(e);
+    private void OnKeyUp(object sender, KeyRoutedEventArgs e) => _page.KeyUp(e);
+    private void OnChar(UIElement sender, CharacterReceivedRoutedEventArgs e) => _page.Char(e);
 
-    private void ResizeSurface()
+    // ---- docked DevTools surface ----
+    private void OnDevToolsRegionChanged(object sender, SizeChangedEventArgs e) => _dev.Resize();
+    private void OnDevPointerMoved(object sender, PointerRoutedEventArgs e) => _dev.PointerMoved(e);
+    private void OnDevPointerExited(object sender, PointerRoutedEventArgs e) => _dev.PointerExited(e);
+    private void OnDevPointerPressed(object sender, PointerRoutedEventArgs e) => _dev.PointerPressed(e);
+    private void OnDevPointerReleased(object sender, PointerRoutedEventArgs e) => _dev.PointerReleased(e);
+    private void OnDevPointerWheel(object sender, PointerRoutedEventArgs e) => _dev.PointerWheel(e);
+    private void OnDevKeyDown(object sender, KeyRoutedEventArgs e) => _dev.KeyDown(e);
+    private void OnDevKeyUp(object sender, KeyRoutedEventArgs e) => _dev.KeyUp(e);
+    private void OnDevChar(UIElement sender, CharacterReceivedRoutedEventArgs e) => _dev.Char(e);
+
+    // ---- DevTools pane splitter ----
+    private bool _draggingSplitter;
+    private void OnDevSplitterPressed(object sender, PointerRoutedEventArgs e)
     {
-        if (_view is null || BrowserRegion.ActualWidth < 1) return;
-        _scale = Root.XamlRoot?.RasterizationScale ?? 1.0;
-        int w = Math.Max(1, (int)Math.Round(BrowserRegion.ActualWidth * _scale));
-        int h = Math.Max(1, (int)Math.Round(BrowserRegion.ActualHeight * _scale));
-        if (w == _pxW && h == _pxH) return;
-        _pxW = w; _pxH = h;
-        _bitmap = new WriteableBitmap(w, h);
-        _frame = new byte[w * h * 4];
-        BrowserImage.Source = _bitmap;
-        BrowserImage.Width = w / _scale;
-        BrowserImage.Height = h / _scale;
-        _view.ResizeSurface(w, h);
+        _draggingSplitter = true;
+        DevToolsSplitter.CapturePointer(e.Pointer);
     }
-
-    private void OnFramePainted(object? sender, FramePaint f)
+    private void OnDevSplitterMoved(object sender, PointerRoutedEventArgs e)
     {
-        // Raised on the CEF UI thread == our dispatcher thread (external pump), so
-        // we can touch the bitmap directly; still guard against a stale size.
-        if (_bitmap is null || f.Width != _pxW || f.Height != _pxH) return;
-        try
-        {
-            int bytes = f.Width * f.Height * 4;
-            if (_frame.Length < bytes) _frame = new byte[bytes];
-            Marshal.Copy(f.Bgra, _frame, 0, bytes);
-            using (var s = _bitmap.PixelBuffer.AsStream())
-            {
-                s.Position = 0;
-                s.Write(_frame, 0, bytes);
-            }
-            _bitmap.Invalidate();
-        }
-        catch (Exception ex)
-        {
-            File.AppendAllText(Path.Combine(Path.GetTempPath(), "diaphane-app.log"),
-                $"{DateTime.Now:o} paint FAILED: {ex.Message}\n");
-        }
+        if (!_draggingSplitter) return;
+        var x = e.GetCurrentPoint(Root).Position.X;
+        var w = Math.Clamp(Root.ActualWidth - x, 240, Root.ActualWidth - 240);
+        DevToolsColumn.Width = new GridLength(w);
     }
-
-    // ---- input forwarding (positions in device px) ----
-    private (int x, int y) Px(PointerRoutedEventArgs e)
+    private void OnDevSplitterReleased(object sender, PointerRoutedEventArgs e)
     {
-        var p = e.GetCurrentPoint(BrowserImage).Position;
-        return ((int)Math.Round(p.X * _scale), (int)Math.Round(p.Y * _scale));
+        _draggingSplitter = false;
+        DevToolsSplitter.ReleasePointerCapture(e.Pointer);
+        _dev.Resize();
     }
-
-    private void OnPointerMoved(object sender, PointerRoutedEventArgs e)
-    {
-        var (x, y) = Px(e);
-        _view?.SendMouseMove(x, y, false);
-    }
-
-    private void OnPointerExited(object sender, PointerRoutedEventArgs e)
-    {
-        var (x, y) = Px(e);
-        _view?.SendMouseMove(x, y, true);
-    }
-
-    private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
-    {
-        BrowserImage.Focus(FocusState.Pointer);
-        BrowserImage.CapturePointer(e.Pointer);
-        var (x, y) = Px(e);
-        _view?.SendMouseButton(x, y, ButtonOf(e), true, 1);
-    }
-
-    private void OnPointerReleased(object sender, PointerRoutedEventArgs e)
-    {
-        BrowserImage.ReleasePointerCapture(e.Pointer);
-        var (x, y) = Px(e);
-        _view?.SendMouseButton(x, y, ButtonOf(e), false, 1);
-    }
-
-    private void OnPointerWheel(object sender, PointerRoutedEventArgs e)
-    {
-        var (x, y) = Px(e);
-        _view?.SendMouseWheel(x, y, 0, e.GetCurrentPoint(BrowserImage).Properties.MouseWheelDelta);
-    }
-
-    private static int ButtonOf(PointerRoutedEventArgs e)
-    {
-        var p = e.GetCurrentPoint(null).Properties;
-        return p.IsRightButtonPressed || p.PointerUpdateKind is Microsoft.UI.Input.PointerUpdateKind.RightButtonReleased ? 2
-             : p.IsMiddleButtonPressed || p.PointerUpdateKind is Microsoft.UI.Input.PointerUpdateKind.MiddleButtonReleased ? 1
-             : 0;
-    }
-
-    private void OnKeyDown(object sender, KeyRoutedEventArgs e) => SendKey(e, true);
-    private void OnKeyUp(object sender, KeyRoutedEventArgs e) => SendKey(e, false);
-
-    private void SendKey(KeyRoutedEventArgs e, bool down)
-    {
-        int scan = (int)e.KeyStatus.ScanCode;
-        _view?.SendKey(down, (int)e.Key, scan != 0 ? scan : (int)e.Key, 0, '\0');
-        // let editable-field navigation keys through; text arrives via CharacterReceived
-    }
-
-    private void OnChar(UIElement sender, CharacterReceivedRoutedEventArgs e)
-        => _view?.SendKey(true, 0, 0, 0, e.Character);
 
     // ---- tab strip ----
     // We build TabViewItems by hand (rather than TabItemsSource + TabItemTemplate)

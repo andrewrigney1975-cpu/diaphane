@@ -44,7 +44,7 @@ public sealed class FakeContext(bool persistent) : IRequestContext
     public void Dispose() => Disposed = true;
 }
 
-public sealed class FakeView : IBrowserView
+public sealed class FakeView : IOffscreenBrowserView
 {
     public Guid Id { get; } = Guid.NewGuid();
     public string CurrentUrl { get; private set; } = "";
@@ -66,15 +66,29 @@ public sealed class FakeView : IBrowserView
     public void SetFocus(bool f) { }
 
     public bool DevToolsOpen { get; private set; }
-    public void ShowDevTools() => DevToolsOpen = true;
-    public void CloseDevTools() => DevToolsOpen = false;
+    private FakeView? _devtools;
+    public Task<IOffscreenBrowserView?> OpenDevToolsAsync(int width, int height)
+    {
+        DevToolsOpen = true;
+        return Task.FromResult<IOffscreenBrowserView?>(_devtools ??= new FakeView());
+    }
+    public void CloseDevTools() { DevToolsOpen = false; _devtools = null; }
     public bool HasDevTools => DevToolsOpen;
+
     public Func<string, string> EvalHandler { get; set; } = _ => "null";
     public Task<string> EvaluateJavaScriptAsync(string script) => Task.FromResult(EvalHandler(script));
+
+    public void ResizeSurface(int width, int height) { }
+    public void Invalidate() { }
+    public void SendMouseMove(int x, int y, bool leaving) { }
+    public void SendMouseButton(int x, int y, int button, bool down, int clickCount) { }
+    public void SendMouseWheel(int x, int y, int deltaX, int deltaY) { }
+    public void SendKey(bool isDown, int windowsKeyCode, int nativeKeyCode, uint modifiers, char character) { }
 
     public void Dispose() { }
 
     public event EventHandler<NavigationState>? NavigationStateChanged;
     public event EventHandler<string>? TitleChanged { add { } remove { } }
     public event EventHandler<string>? FaviconUrlChanged { add { } remove { } }
+    public event EventHandler<FramePaint>? FramePainted { add { } remove { } }
 }

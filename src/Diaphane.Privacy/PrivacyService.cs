@@ -46,6 +46,12 @@ public sealed class PrivacyService
         _store.Save(Settings);
     }
 
+    public void SetEnableDevTools(bool enable)
+    {
+        Settings.EnableDevTools = enable;
+        _store.Save(Settings);
+    }
+
     public void SaveDefaults(ClearScope scope, ClearTimeRange range)
     {
         Settings.DefaultClearScope = scope;

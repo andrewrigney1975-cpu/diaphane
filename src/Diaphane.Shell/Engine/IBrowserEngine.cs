@@ -65,11 +65,6 @@ public interface IBrowserView : IDisposable
     void SetVisible(bool visible);
     void SetFocus(bool focused);
 
-    /// <summary>Open/close DevTools in its own top-level window.</summary>
-    void ShowDevTools();
-    void CloseDevTools();
-    bool HasDevTools { get; }
-
     /// <summary>
     /// Evaluate <paramref name="script"/> in the page and return the JSON-serialised
     /// result (CDP Runtime.evaluate). Rejects if evaluation errors.
@@ -88,6 +83,16 @@ public interface IOffscreenBrowserView : IBrowserView
 {
     /// <summary>Raised on the CEF UI thread with a pointer to a top-down BGRA32 frame, valid only for the call.</summary>
     event EventHandler<FramePaint>? FramePainted;
+
+    /// <summary>
+    /// Open DevTools for this view, rendered off-screen so the shell can dock it
+    /// in a pane. Resolves the front-end over the loopback debugging endpoint.
+    /// Returns the DevTools view (also off-screen), or null on failure.
+    /// Idempotent — returns the existing one if already open.
+    /// </summary>
+    Task<IOffscreenBrowserView?> OpenDevToolsAsync(int width, int height);
+    void CloseDevTools();
+    bool HasDevTools { get; }
 
     void ResizeSurface(int width, int height);
     void Invalidate();

@@ -25,6 +25,7 @@ public sealed partial class PrivacyViewModel : ObservableObject
         _timeRangeIndex   = (int)service.Settings.DefaultTimeRange;
         _clearOnExit      = service.Settings.ClearOnExit != ClearScope.None;
         _allowWidevine    = service.Settings.EnableWidevine;
+        _enableDevTools   = service.Settings.EnableDevTools;
         _lastResult       = "";
     }
 
@@ -39,6 +40,7 @@ public sealed partial class PrivacyViewModel : ObservableObject
     [ObservableProperty] private int _timeRangeIndex;
     [ObservableProperty] private bool _clearOnExit;
     [ObservableProperty] private bool _allowWidevine;
+    [ObservableProperty] private bool _enableDevTools;
     [ObservableProperty] private bool _busy;
     [ObservableProperty] private string _lastResult;
 
@@ -48,6 +50,14 @@ public sealed partial class PrivacyViewModel : ObservableObject
         LastResult = value
             ? "Widevine will be permitted after you restart diaphane. diaphane still never downloads the DRM module."
             : "Widevine will be blocked after you restart diaphane.";
+    }
+
+    partial void OnEnableDevToolsChanged(bool value)
+    {
+        _service.SetEnableDevTools(value);
+        LastResult = value
+            ? "DevTools will be available after you restart diaphane."
+            : "The DevTools loopback port will be closed after you restart diaphane.";
     }
 
     private ClearScope Scope =>

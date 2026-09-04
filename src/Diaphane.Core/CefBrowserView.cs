@@ -21,7 +21,9 @@ internal sealed class CefBrowserView : IOffscreenBrowserView
     private NavigationState _state = new("about:blank", "", true, false, false, 0);
     private bool _disposed;
 
-    internal string NativeId { get; }
+    internal string NativeId { get; private set; } = "";
+    internal CefEngine? Engine { get; init; }
+    private CefBrowserView? _devtools;
     public Guid Id { get; } = Guid.NewGuid();
     public bool CanGoBack => dc_view_can_back(NativeId) != 0;
     public bool CanGoForward => dc_view_can_forward(NativeId) != 0;
@@ -33,6 +35,16 @@ internal sealed class CefBrowserView : IOffscreenBrowserView
     public event EventHandler<FramePaint>? FramePainted;
 
     public CefBrowserView(string contextId, nint hostHwnd, int width = 1280, int height = 800)
+        : this()
+    {
+        var p = dc_view_create(contextId, hostHwnd, width, height, _cb);
+        NativeId = PtrToUtf8(p);
+        if (string.IsNullOrEmpty(NativeId))
+            throw new InvalidOperationException("CefBrowserHost::CreateBrowser failed.");
+    }
+
+    /// <summary>Roots all the CEF callback delegates; leaves <see cref="NativeId"/> unset.</summary>
+    private CefBrowserView()
     {
         _navCb = (_, url, title, loading, back, fwd, progress, _) =>
         {
@@ -82,11 +94,6 @@ internal sealed class CefBrowserView : IOffscreenBrowserView
             OnPaint = _paintCb,
             User = IntPtr.Zero,
         };
-
-        var p = dc_view_create(contextId, hostHwnd, width, height, _cb);
-        NativeId = PtrToUtf8(p);
-        if (string.IsNullOrEmpty(NativeId))
-            throw new InvalidOperationException("CefBrowserHost::CreateBrowserSync failed.");
     }
 
     public void Navigate(string url) => dc_view_navigate(NativeId, url);
@@ -98,9 +105,31 @@ internal sealed class CefBrowserView : IOffscreenBrowserView
     public void SetVisible(bool visible) => dc_view_set_visible(NativeId, visible ? 1 : 0);
     public void SetFocus(bool focused) => dc_view_set_focus(NativeId, focused ? 1 : 0);
 
-    public void ShowDevTools() => dc_view_show_devtools(NativeId, 0, 0);
-    public void CloseDevTools() => dc_view_close_devtools(NativeId);
-    public bool HasDevTools => dc_view_has_devtools(NativeId) != 0;
+    public bool HasDevTools => _devtools is { _disposed: false };
+
+    public async Task<IOffscreenBrowserView?> OpenDevToolsAsync(int width, int height)
+    {
+        if (_devtools is { _disposed: false }) return _devtools;
+        if (Engine is null) return null;
+
+        var inspected = _state.Url;
+        // Resolve off the UI/pump thread — the loopback DevTools HTTP handler
+        // needs that thread to service the request.
+        var url = await Task.Run(() => Engine.ResolveDevToolsFrontendUrl(inspected)).ConfigureAwait(true);
+        if (url is null || _devtools is { _disposed: false }) return _devtools;
+
+        var dt = Engine.CreateRawView(Math.Max(1, width), Math.Max(1, height));
+        dt.Closed += (_, _) => _devtools = null;
+        dt.Navigate(url);
+        _devtools = dt;
+        return dt;
+    }
+
+    public void CloseDevTools()
+    {
+        _devtools?.Dispose();
+        _devtools = null;
+    }
 
     public Task<string> EvaluateJavaScriptAsync(string script)
     {

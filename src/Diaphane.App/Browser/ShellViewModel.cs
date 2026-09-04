@@ -30,6 +30,7 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _showPrivacyPanel;
     [ObservableProperty] private bool _showExtensionsPanel;
     [ObservableProperty] private bool _showMediaPanel;
+    [ObservableProperty] private bool _showDevTools;
 
     public ObservableCollection<TabModel> Tabs { get; } = new();
     public ObservableCollection<Bookmark> BookmarksBar { get; } = new();
@@ -260,7 +261,7 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
         ClosePanel(true, "diaphane://media");
     }
 
-    [RelayCommand] public void ToggleDevTools() => ActiveTab?.ToggleDevTools();
+    [RelayCommand] public void ToggleDevTools() => ShowDevTools = !ShowDevTools;
 
     [RelayCommand(CanExecute = nameof(CanGoBack))] public void GoBack() => ActiveTab?.Back();
     [RelayCommand(CanExecute = nameof(CanGoForward))] public void GoForward() => ActiveTab?.Forward();
