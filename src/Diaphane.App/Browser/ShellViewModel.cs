@@ -142,6 +142,7 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
             IsLoading = newValue.IsLoading;
             ActiveIsSandbox = newValue.IsSandbox;
         }
+        OnPropertyChanged(nameof(ActiveIsBookmarked));
         NotifyNav();
     }
 
@@ -153,6 +154,7 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
             case nameof(TabModel.Url):
                 AddressText = Presentable(t.Url);
                 MaybeRecordVisit(t);
+                OnPropertyChanged(nameof(ActiveIsBookmarked));
                 break;
             case nameof(TabModel.Title):
                 MaybeRecordVisit(t);

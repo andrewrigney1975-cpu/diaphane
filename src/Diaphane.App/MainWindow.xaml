@@ -14,13 +14,15 @@
         </Grid.Resources>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
 
         <!-- tab strip -->
-        <controls:TabView x:Name="TabStrip" Grid.Row="0"
+        <controls:TabView x:Name="TabStrip" Grid.Row="0" Grid.ColumnSpan="2"
                           VerticalAlignment="Top" Height="40"
                           IsAddTabButtonVisible="True"
                           AddTabButtonClick="OnAddTab"
@@ -28,129 +30,177 @@
                           TabCloseRequested="OnTabClose"
                           CanReorderTabs="True" />
 
-        <!-- toolbar -->
-        <Grid Grid.Row="1" Height="44" Padding="8,4" ColumnSpacing="4"
-              Background="{x:Bind local:MainWindow.ToolbarBrush(Vm.ActiveIsSandbox), Mode=OneWay}">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
+        <!-- left action rail (VSCode-style): every non-navigation browser action lives here -->
+        <Grid Grid.Row="1" Grid.Column="0" Width="48"
+              Background="{ThemeResource ControlFillColorDefaultBrush}"
+              BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}" BorderThickness="0,0,1,0">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
 
-            <Button Grid.Column="0" Command="{x:Bind Vm.GoBackCommand}" ToolTipService.ToolTip="Back (Alt+Left)">
-                <FontIcon Glyph="&#xE72B;" FontSize="14" />
-            </Button>
-            <Button Grid.Column="1" Command="{x:Bind Vm.GoForwardCommand}" ToolTipService.ToolTip="Forward (Alt+Right)">
-                <FontIcon Glyph="&#xE72A;" FontSize="14" />
-            </Button>
-            <Button Grid.Column="2" Command="{x:Bind Vm.ReloadCommand}" ToolTipService.ToolTip="Reload (F5)">
-                <FontIcon Glyph="&#xE72C;" FontSize="14" />
-            </Button>
-            <Button Grid.Column="3" Command="{x:Bind Vm.GoHomeCommand}" ToolTipService.ToolTip="Home">
-                <FontIcon Glyph="&#xE80F;" FontSize="14" />
-            </Button>
+            <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" HorizontalScrollMode="Disabled">
+                <StackPanel Orientation="Vertical" Spacing="3" Padding="4,8">
+                    <ToggleButton Style="{StaticResource ActivityBarToggleButtonStyle}"
+                                  Command="{x:Bind Vm.ToggleBookmarkCommand}"
+                                  IsChecked="{x:Bind Vm.ActiveIsBookmarked, Mode=OneWay}"
+                                  AutomationProperties.Name="Bookmark" ToolTipService.ToolTip="Bookmark (Ctrl+D)">
+                        <FontIcon Glyph="&#xE734;" FontSize="18" />
+                    </ToggleButton>
+                    <Button Style="{StaticResource ActivityBarButtonStyle}"
+                            AutomationProperties.Name="History" ToolTipService.ToolTip="History (Ctrl+H)">
+                        <FontIcon Glyph="&#xE81C;" FontSize="18" />
+                        <Button.Flyout>
+                            <Flyout Opening="OnHistoryFlyoutOpening" Placement="Right">
+                                <StackPanel Width="420" Spacing="6">
+                                    <Grid>
+                                        <TextBlock Text="History" FontWeight="SemiBold" VerticalAlignment="Center" />
+                                        <HyperlinkButton Content="Clear all" HorizontalAlignment="Right"
+                                                         Command="{x:Bind Vm.ClearHistoryCommand}" />
+                                    </Grid>
+                                    <ListView x:Name="HistoryList" MaxHeight="380" SelectionMode="None"
+                                              IsItemClickEnabled="True" ItemClick="OnHistoryItemClick">
+                                        <ListView.ItemTemplate>
+                                            <DataTemplate x:DataType="data:VisitEntry">
+                                                <StackPanel>
+                                                    <TextBlock Text="{x:Bind Title}" TextTrimming="CharacterEllipsis" />
+                                                    <TextBlock Text="{x:Bind Url}" FontSize="11" Opacity="0.6"
+                                                               TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ListView.ItemTemplate>
+                                    </ListView>
+                                </StackPanel>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+                    <Rectangle Height="1" Margin="8,3" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
 
-            <AutoSuggestBox x:Name="Address" Grid.Column="4" VerticalAlignment="Center"
-                            PlaceholderText="Search or enter address"
-                            QueryIcon="Find"
-                            Text="{x:Bind Vm.AddressText, Mode=TwoWay}"
-                            TextChanged="OnAddressTextChanged"
-                            QuerySubmitted="OnAddressSubmitted"
-                            SuggestionChosen="OnSuggestionChosen" />
+                    <Button Style="{StaticResource ActivityBarButtonStyle}"
+                            Command="{x:Bind Vm.NewSandboxTabCommand}"
+                            AutomationProperties.Name="New Sandbox tab" ToolTipService.ToolTip="New Sandbox tab (Ctrl+Shift+N)">
+                        <FontIcon Glyph="&#xE727;" FontSize="18" Foreground="#B39DDB" />
+                    </Button>
+                    <ToggleButton Style="{StaticResource ActivityBarToggleButtonStyle}"
+                                  Command="{x:Bind Vm.ToggleBookmarksBarCommand}"
+                                  IsChecked="{x:Bind Vm.ShowBookmarksBar, Mode=OneWay}"
+                                  AutomationProperties.Name="Bookmarks bar" ToolTipService.ToolTip="Bookmarks bar (Ctrl+Shift+B)">
+                        <FontIcon Glyph="&#xE8A4;" FontSize="18" />
+                    </ToggleButton>
+                    <Rectangle Height="1" Margin="8,3" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
 
-            <Button Grid.Column="5" Command="{x:Bind Vm.ToggleBookmarkCommand}" ToolTipService.ToolTip="Bookmark (Ctrl+D)">
-                <FontIcon Glyph="&#xE734;" FontSize="14" />
-            </Button>
-            <Button Grid.Column="6" ToolTipService.ToolTip="History (Ctrl+H)">
-                <FontIcon Glyph="&#xE81C;" FontSize="14" />
-                <Button.Flyout>
-                    <Flyout Opening="OnHistoryFlyoutOpening">
-                        <StackPanel Width="420" Spacing="6">
-                            <Grid>
-                                <TextBlock Text="History" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                <HyperlinkButton Content="Clear all" HorizontalAlignment="Right"
-                                                 Command="{x:Bind Vm.ClearHistoryCommand}" />
-                            </Grid>
-                            <ListView x:Name="HistoryList" MaxHeight="380" SelectionMode="None"
-                                      IsItemClickEnabled="True" ItemClick="OnHistoryItemClick">
-                                <ListView.ItemTemplate>
-                                    <DataTemplate x:DataType="data:VisitEntry">
-                                        <StackPanel>
-                                            <TextBlock Text="{x:Bind Title}" TextTrimming="CharacterEllipsis" />
-                                            <TextBlock Text="{x:Bind Url}" FontSize="11" Opacity="0.6"
-                                                       TextTrimming="CharacterEllipsis" />
-                                        </StackPanel>
-                                    </DataTemplate>
-                                </ListView.ItemTemplate>
-                            </ListView>
-                        </StackPanel>
-                    </Flyout>
-                </Button.Flyout>
-            </Button>
-            <Button Grid.Column="7" Command="{x:Bind Vm.NewSandboxTabCommand}" ToolTipService.ToolTip="New Sandbox tab (Ctrl+Shift+N)">
-                <FontIcon Glyph="&#xE727;" FontSize="14" Foreground="#B39DDB" />
-            </Button>
-            <Button Grid.Column="8" Command="{x:Bind Vm.ToggleBookmarksBarCommand}" ToolTipService.ToolTip="Bookmarks bar (Ctrl+Shift+B)">
-                <FontIcon Glyph="&#xE8A4;" FontSize="14" />
-            </Button>
-            <Button Grid.Column="9" Command="{x:Bind Vm.ToggleExtensionsPanelCommand}" ToolTipService.ToolTip="Extensions (Ctrl+Shift+E)">
-                <FontIcon Glyph="&#xEA86;" FontSize="14" />
-            </Button>
-            <Button Grid.Column="10" Command="{x:Bind Vm.ToggleMediaPanelCommand}" ToolTipService.ToolTip="Media &amp; codecs (Ctrl+Shift+M)">
-                <FontIcon Glyph="&#xE714;" FontSize="14" />
-            </Button>
-            <Button Grid.Column="11" Command="{x:Bind Vm.ToggleDevToolsCommand}" ToolTipService.ToolTip="DevTools (F12)">
-                <FontIcon Glyph="&#xEBE8;" FontSize="14" />
-            </Button>
-            <Button Grid.Column="12" Command="{x:Bind Vm.TogglePrivacyPanelCommand}" ToolTipService.ToolTip="Clear browsing data (Ctrl+Shift+Del)">
-                <FontIcon Glyph="&#xE72E;" FontSize="14" />
-            </Button>
-            <Button Grid.Column="13" Command="{x:Bind Vm.ToggleSettingsPanelCommand}" ToolTipService.ToolTip="Settings">
-                <FontIcon Glyph="&#xE713;" FontSize="14" />
-            </Button>
+                    <ToggleButton Style="{StaticResource ActivityBarToggleButtonStyle}"
+                                  Command="{x:Bind Vm.ToggleExtensionsPanelCommand}"
+                                  IsChecked="{x:Bind Vm.ShowExtensionsPanel, Mode=OneWay}"
+                                  AutomationProperties.Name="Extensions" ToolTipService.ToolTip="Extensions (Ctrl+Shift+E)">
+                        <FontIcon Glyph="&#xEA86;" FontSize="18" />
+                    </ToggleButton>
+                    <ToggleButton Style="{StaticResource ActivityBarToggleButtonStyle}"
+                                  Command="{x:Bind Vm.ToggleMediaPanelCommand}"
+                                  IsChecked="{x:Bind Vm.ShowMediaPanel, Mode=OneWay}"
+                                  AutomationProperties.Name="Media and codecs" ToolTipService.ToolTip="Media &amp; codecs (Ctrl+Shift+M)">
+                        <FontIcon Glyph="&#xE714;" FontSize="18" />
+                    </ToggleButton>
+                    <ToggleButton Style="{StaticResource ActivityBarToggleButtonStyle}"
+                                  Command="{x:Bind Vm.ToggleDevToolsCommand}"
+                                  IsChecked="{x:Bind Vm.ShowDevTools, Mode=OneWay}"
+                                  AutomationProperties.Name="DevTools" ToolTipService.ToolTip="DevTools (F12)">
+                        <FontIcon Glyph="&#xEBE8;" FontSize="18" />
+                    </ToggleButton>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- pinned to the bottom, like Docket's status/settings group -->
+            <StackPanel Grid.Row="1" Orientation="Vertical" Spacing="3" Padding="4,8">
+                <Rectangle Height="1" Margin="8,3" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
+                <ToggleButton Style="{StaticResource ActivityBarToggleButtonStyle}"
+                              Command="{x:Bind Vm.TogglePrivacyPanelCommand}"
+                              IsChecked="{x:Bind Vm.ShowPrivacyPanel, Mode=OneWay}"
+                              AutomationProperties.Name="Clear browsing data" ToolTipService.ToolTip="Clear browsing data (Ctrl+Shift+Del)">
+                    <FontIcon Glyph="&#xE72E;" FontSize="18" />
+                </ToggleButton>
+                <ToggleButton Style="{StaticResource ActivityBarToggleButtonStyle}"
+                              Command="{x:Bind Vm.ToggleSettingsPanelCommand}"
+                              IsChecked="{x:Bind Vm.ShowSettingsPanel, Mode=OneWay}"
+                              AutomationProperties.Name="Settings" ToolTipService.ToolTip="Settings">
+                    <FontIcon Glyph="&#xE713;" FontSize="18" />
+                </ToggleButton>
+            </StackPanel>
         </Grid>
 
-        <!-- bookmarks bar -->
-        <Border Grid.Row="2" Height="32" Padding="6,0"
-                Background="{ThemeResource LayerFillColorAltBrush}"
-                Visibility="{x:Bind local:MainWindow.VisIf(Vm.ShowBookmarksBar), Mode=OneWay}">
-            <ScrollViewer HorizontalScrollMode="Auto" VerticalScrollMode="Disabled"
-                          HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled">
-                <ItemsControl ItemsSource="{x:Bind Vm.BookmarksBar, Mode=OneWay}">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="2" /></ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate x:DataType="data:Bookmark">
-                            <Button Padding="8,2" Background="Transparent" BorderThickness="0"
-                                    Click="OnBookmarkClick" Tag="{x:Bind}">
-                                <TextBlock Text="{x:Bind Title}" FontSize="12" MaxWidth="160"
-                                           TextTrimming="CharacterEllipsis" />
-                                <Button.ContextFlyout>
-                                    <MenuFlyout>
-                                        <MenuFlyoutItem Text="Remove" Click="OnBookmarkRemove" Tag="{x:Bind}" />
-                                    </MenuFlyout>
-                                </Button.ContextFlyout>
-                            </Button>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
-            </ScrollViewer>
-        </Border>
+        <!-- main content: toolbar / bookmarks bar / browser surface -->
+        <Grid Grid.Row="1" Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
 
-        <!-- CEF off-screen surface + docked DevTools pane -->
-        <Grid Grid.Row="3">
+            <!-- toolbar: navigation only — every other action lives in the left rail -->
+            <Grid Grid.Row="0" Height="44" Padding="8,4" ColumnSpacing="4"
+                  Background="{x:Bind local:MainWindow.ToolbarBrush(Vm.ActiveIsSandbox), Mode=OneWay}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Button Grid.Column="0" Command="{x:Bind Vm.GoBackCommand}" ToolTipService.ToolTip="Back (Alt+Left)">
+                    <FontIcon Glyph="&#xE72B;" FontSize="14" />
+                </Button>
+                <Button Grid.Column="1" Command="{x:Bind Vm.GoForwardCommand}" ToolTipService.ToolTip="Forward (Alt+Right)">
+                    <FontIcon Glyph="&#xE72A;" FontSize="14" />
+                </Button>
+                <Button Grid.Column="2" Command="{x:Bind Vm.ReloadCommand}" ToolTipService.ToolTip="Reload (F5)">
+                    <FontIcon Glyph="&#xE72C;" FontSize="14" />
+                </Button>
+                <Button Grid.Column="3" Command="{x:Bind Vm.GoHomeCommand}" ToolTipService.ToolTip="Home">
+                    <FontIcon Glyph="&#xE80F;" FontSize="14" />
+                </Button>
+
+                <!-- spans full width up to 1280px, then centers -->
+                <AutoSuggestBox x:Name="Address" Grid.Column="4" VerticalAlignment="Center"
+                                HorizontalAlignment="Stretch" MaxWidth="1280"
+                                PlaceholderText="Search or enter address"
+                                QueryIcon="Find"
+                                Text="{x:Bind Vm.AddressText, Mode=TwoWay}"
+                                TextChanged="OnAddressTextChanged"
+                                QuerySubmitted="OnAddressSubmitted"
+                                SuggestionChosen="OnSuggestionChosen" />
+            </Grid>
+
+            <!-- bookmarks bar -->
+            <Border Grid.Row="1" Height="32" Padding="6,0"
+                    Background="{ThemeResource LayerFillColorAltBrush}"
+                    Visibility="{x:Bind local:MainWindow.VisIf(Vm.ShowBookmarksBar), Mode=OneWay}">
+                <ScrollViewer HorizontalScrollMode="Auto" VerticalScrollMode="Disabled"
+                              HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled">
+                    <ItemsControl ItemsSource="{x:Bind Vm.BookmarksBar, Mode=OneWay}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="2" /></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="data:Bookmark">
+                                <Button Padding="8,2" Background="Transparent" BorderThickness="0"
+                                        Click="OnBookmarkClick" Tag="{x:Bind}">
+                                    <TextBlock Text="{x:Bind Title}" FontSize="12" MaxWidth="160"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <Button.ContextFlyout>
+                                        <MenuFlyout>
+                                            <MenuFlyoutItem Text="Remove" Click="OnBookmarkRemove" Tag="{x:Bind}" />
+                                        </MenuFlyout>
+                                    </Button.ContextFlyout>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Border>
+
+            <!-- CEF off-screen surface + docked DevTools pane -->
+            <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -197,10 +247,11 @@
                            PointerWheelChanged="OnDevPointerWheel" />
                 </ScrollViewer>
             </Grid>
+            </Grid>
         </Grid>
 
         <!-- diaphane://privacy — Clear browsing data -->
-        <Grid Grid.Row="3" Background="#99000000"
+        <Grid Grid.Row="1" Grid.ColumnSpan="2" Background="#99000000"
               Visibility="{x:Bind local:MainWindow.VisIf(Vm.ShowPrivacyPanel), Mode=OneWay}">
             <Border MaxWidth="460" Margin="24" Padding="24" VerticalAlignment="Top"
                     HorizontalAlignment="Center"
@@ -254,7 +305,7 @@
         </Grid>
 
         <!-- diaphane://extensions -->
-        <Grid Grid.Row="3" Background="#99000000"
+        <Grid Grid.Row="1" Grid.ColumnSpan="2" Background="#99000000"
               Visibility="{x:Bind local:MainWindow.VisIf(Vm.ShowExtensionsPanel), Mode=OneWay}">
             <Border MaxWidth="560" MaxHeight="620" Margin="24" Padding="24" VerticalAlignment="Top"
                     HorizontalAlignment="Center"
@@ -326,7 +377,7 @@
         </Grid>
 
         <!-- diaphane://media -->
-        <Grid Grid.Row="3" Background="#99000000"
+        <Grid Grid.Row="1" Grid.ColumnSpan="2" Background="#99000000"
               Visibility="{x:Bind local:MainWindow.VisIf(Vm.ShowMediaPanel), Mode=OneWay}">
             <Border MaxWidth="560" MaxHeight="640" Margin="24" Padding="24" VerticalAlignment="Top"
                     HorizontalAlignment="Center"
@@ -412,7 +463,7 @@
         </Grid>
 
         <!-- diaphane://settings -->
-        <Grid Grid.Row="3" Background="#99000000"
+        <Grid Grid.Row="1" Grid.ColumnSpan="2" Background="#99000000"
               Visibility="{x:Bind local:MainWindow.VisIf(Vm.ShowSettingsPanel), Mode=OneWay}">
             <Border MaxWidth="520" MaxHeight="680" Margin="24" Padding="24" VerticalAlignment="Top"
                     HorizontalAlignment="Center"
