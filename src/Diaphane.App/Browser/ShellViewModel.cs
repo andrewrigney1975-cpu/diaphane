@@ -11,7 +11,7 @@ namespace Diaphane.App.Browser;
 
 public sealed partial class ShellViewModel : ObservableObject, IDisposable
 {
-    private const string Homepage = "https://duckduckgo.com/";
+    private const string Homepage = "about:blank";
 
     private readonly IBrowserEngine _engine;
     private readonly HistoryStore _history;
