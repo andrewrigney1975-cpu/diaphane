@@ -165,10 +165,20 @@ bool DcClient::OnBeforeDownload(CefRefPtr<CefBrowser> browser,
                                 CefRefPtr<CefDownloadItem> download_item,
                                 const CefString& suggested_name,
                                 CefRefPtr<CefBeforeDownloadCallback> callback) {
-  std::string dir = DcDefaultDownloadDir();
-  std::string name = suggested_name.ToString();
-  std::string path = dir.empty() ? name : dir + name;
-  // show_dialog=false: no native window to parent a Save As dialog to (OSR).
+  std::string path;
+  auto pending = pending_save_paths_.find(download_item->GetOriginalUrl().ToString());
+  if (pending != pending_save_paths_.end()) {
+    // An explicit "Save as…" from the shell — a real WinUI FileSavePicker already
+    // resolved this exact path, so use it verbatim instead of the default dir.
+    path = pending->second;
+    pending_save_paths_.erase(pending);
+  } else {
+    std::string dir = DcDefaultDownloadDir();
+    std::string name = suggested_name.ToString();
+    path = dir.empty() ? name : dir + name;
+  }
+  // show_dialog=false: CEF's own Save As has no native window to parent to in this OSR
+  // app — "Save as…" gets its dialog from the shell instead, before StartDownload runs.
   callback->Continue(path, /*show_dialog=*/false);
   return true;  // returning false (the default) silently drops the download
 }

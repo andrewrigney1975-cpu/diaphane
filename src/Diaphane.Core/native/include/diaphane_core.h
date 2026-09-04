@@ -164,6 +164,11 @@ DC_API void dc_view_set_context_menu_cb(const char* view_id, dc_context_menu_cb 
 // the same OnBeforeDownload/dc_view_set_download_cb path as a page-initiated download.
 DC_API void dc_view_start_download(const char* view_id, const char* url);
 
+// Same as dc_view_start_download, but pins the exact destination path — e.g. from a
+// real WinUI FileSavePicker the shell showed for "Save link/image/video as…" — instead
+// of the default-download-dir + suggested-name path dc_view_start_download computes.
+DC_API void dc_view_start_download_to(const char* view_id, const char* url, const char* save_path);
+
 // ---- diagnostics ----
 DC_API const char* dc_version(void);   // "CEF x.y.z / Chromium a.b.c.d"
 

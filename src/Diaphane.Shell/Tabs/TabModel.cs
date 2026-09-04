@@ -53,7 +53,7 @@ public sealed class TabModel : INotifyPropertyChanged
         remove => _view.ContextMenuRequested -= value;
     }
 
-    public void StartDownload(string url) => _view.StartDownload(url);
+    public void StartDownload(string url, string? savePath = null) => _view.StartDownload(url, savePath);
 
     public string Title { get => _title; private set => Set(ref _title, value); }
     public string Url { get => _url; private set => Set(ref _url, value); }

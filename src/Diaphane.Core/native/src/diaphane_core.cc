@@ -492,6 +492,14 @@ void dc_view_start_download(const char* view_id, const char* url) {
   if (auto b = LookupBrowser(view_id); b && url) b->GetHost()->StartDownload(CefString(url));
 }
 
+void dc_view_start_download_to(const char* view_id, const char* url, const char* save_path) {
+  auto c = LookupView(view_id);
+  auto b = c ? c->browser() : nullptr;
+  if (!b || !url || !save_path) return;
+  c->SetPendingSavePath(url, save_path);
+  b->GetHost()->StartDownload(CefString(url));
+}
+
 const char* dc_version(void) {
   if (g_version_str.empty())
     g_version_str = std::string("CEF ") + CEF_VERSION;

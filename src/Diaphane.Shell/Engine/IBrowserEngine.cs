@@ -100,8 +100,10 @@ public interface IBrowserView : IDisposable
     event EventHandler<ContextMenuInfo>? ContextMenuRequested;
 
     /// <summary>Explicitly download <paramref name="url"/> — "Save link/image/video as…".
-    /// Goes through the same pipeline as a page-initiated download.</summary>
-    void StartDownload(string url);
+    /// Goes through the same pipeline as a page-initiated download. Pass
+    /// <paramref name="savePath"/> to pin the exact destination (e.g. from a real file
+    /// picker the shell already showed); omit it to use the default download directory.</summary>
+    void StartDownload(string url, string? savePath = null);
 }
 
 public sealed record NavigationState(string Url, string Title, bool IsLoading, bool CanGoBack, bool CanGoForward, double Progress);

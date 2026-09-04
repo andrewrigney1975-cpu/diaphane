@@ -173,9 +173,13 @@ internal sealed class CefBrowserView : IOffscreenBrowserView
     public void SendKey(bool isDown, int windowsKeyCode, int nativeKeyCode, uint modifiers, char character) =>
         dc_view_key(NativeId, isDown ? 1 : 0, windowsKeyCode, nativeKeyCode, modifiers, character);
 
-    public void StartDownload(string url)
+    public void StartDownload(string url, string? savePath = null)
     {
-        try { dc_view_start_download(NativeId, url); }
+        try
+        {
+            if (string.IsNullOrEmpty(savePath)) dc_view_start_download(NativeId, url);
+            else dc_view_start_download_to(NativeId, url, savePath);
+        }
         catch (EntryPointNotFoundException) { /* not supported on this engine build */ }
     }
 

@@ -2,6 +2,7 @@
 #define DIAPHANE_DC_CLIENT_H_
 
 #include <string>
+#include <unordered_map>
 
 #include "include/cef_client.h"
 #include "include/cef_context_menu_handler.h"
@@ -52,6 +53,13 @@ class DcClient : public CefClient,
   void SetDownloadCallback(dc_download_cb cb, void* user) { download_cb_ = cb; download_user_ = user; }
   void SetPopupCallback(dc_popup_cb cb, void* user) { popup_cb_ = cb; popup_user_ = user; }
   void SetContextMenuCallback(dc_context_menu_cb cb, void* user) { context_menu_cb_ = cb; context_menu_user_ = user; }
+
+  // Pins the destination path the next OnBeforeDownload for |url| should use, in place
+  // of the default-download-dir + suggested-name path. Consumed (erased) on first match,
+  // keyed by CefDownloadItem::GetOriginalUrl() since a redirect can change GetURL().
+  void SetPendingSavePath(const std::string& url, const std::string& path) {
+    pending_save_paths_[url] = path;
+  }
 
   // CefClient
   CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override { return this; }
@@ -173,6 +181,7 @@ class DcClient : public CefClient,
   void* popup_user_ = nullptr;
   dc_context_menu_cb context_menu_cb_ = nullptr;
   void* context_menu_user_ = nullptr;
+  std::unordered_map<std::string, std::string> pending_save_paths_;  // url -> explicit path
 
   IMPLEMENT_REFCOUNTING(DcClient);
   DISALLOW_COPY_AND_ASSIGN(DcClient);

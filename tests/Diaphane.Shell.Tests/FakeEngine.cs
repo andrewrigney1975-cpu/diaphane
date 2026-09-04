@@ -84,7 +84,7 @@ public sealed class FakeView : IOffscreenBrowserView
     public void SendMouseButton(int x, int y, int button, bool down, int clickCount) { }
     public void SendMouseWheel(int x, int y, int deltaX, int deltaY) { }
     public void SendKey(bool isDown, int windowsKeyCode, int nativeKeyCode, uint modifiers, char character) { }
-    public void StartDownload(string url) { }
+    public void StartDownload(string url, string? savePath = null) { }
 
     public void Dispose() { }
 

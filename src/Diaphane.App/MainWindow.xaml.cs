@@ -379,11 +379,43 @@ public sealed partial class MainWindow : Window
         });
     }
 
-    private static void AddSaveItem(MenuFlyout flyout, string text, string url, TabModel tab)
+    private void AddSaveItem(MenuFlyout flyout, string text, string url, TabModel tab)
     {
         var item = new MenuFlyoutItem { Text = text };
-        item.Click += (_, _) => tab.StartDownload(url);
+        item.Click += async (_, _) => await SaveAsAsync(tab, url);
         flyout.Items.Add(item);
+    }
+
+    private async Task SaveAsAsync(TabModel tab, string url)
+    {
+        var suggestedName = SuggestFileName(url);
+        var ext = Path.GetExtension(suggestedName);
+
+        var picker = new Windows.Storage.Pickers.FileSavePicker
+        {
+            SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.Downloads,
+            SuggestedFileName = suggestedName,
+        };
+        if (!string.IsNullOrEmpty(ext))
+            picker.FileTypeChoices.Add($"{ext.TrimStart('.').ToUpperInvariant()} file", new List<string> { ext });
+        picker.FileTypeChoices.Add("All files", new List<string> { "." }); // WinRT's spelling of "any extension"
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
+
+        var file = await picker.PickSaveFileAsync();
+        if (file is not null) tab.StartDownload(url, file.Path);
+    }
+
+    private static string SuggestFileName(string url)
+    {
+        try
+        {
+            var name = Path.GetFileName(new Uri(url).LocalPath);
+            return string.IsNullOrWhiteSpace(name) ? "download" : Uri.UnescapeDataString(name);
+        }
+        catch (UriFormatException)
+        {
+            return "download";
+        }
     }
 
     private async void UpdateDevToolsPane()

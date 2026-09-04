@@ -198,6 +198,9 @@ internal static partial class NativeMethods
     [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial void dc_view_start_download(string viewId, string url);
 
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dc_view_start_download_to(string viewId, string url, string savePath);
+
     [LibraryImport(Dll)]
     internal static partial IntPtr dc_version();
 
