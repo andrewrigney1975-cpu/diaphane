@@ -383,3 +383,28 @@ Native changes this surfaced (all kept — they matter for real use):
 Still open: `<select>` / date-picker dropdowns paint via `PET_POPUP`, which the
 shell doesn't composite yet, so the dropdown isn't visible (keyboard still
 works); `<input type=file>` needs wiring to a real WinUI file picker.
+
+---
+
+# Bugfix: form fields flashed focus then lost it; keyboard never reached the page
+
+Two separate WinUI-side bugs in the OSR surface, both fixed:
+
+1. **Keyboard never routed.** A bare `Image` — and a templated `ContentControl`
+   — do not reliably hold keyboard focus in WinUI 3, so `KeyDown` /
+   `CharacterReceived` never fired even though the DOM element was focused. Fix:
+   host the display `Image` inside a focusable `ScrollViewer` (`BrowserFocus`,
+   scroll disabled) that carries the key events and is the `.Focus()` target.
+   Pointer events stay on the `Image` — the `ScrollViewer` was swallowing
+   `PointerReleased` (so checkboxes/buttons never got their click).
+
+2. **Focus lost immediately.** `Image.LostFocus → SetFocus(false)` fired
+   transiently right after the click and blurred the field. Fix: never blur on
+   `LostFocus`; blur the page only when the address bar explicitly takes focus
+   (`Address.GotFocus`).
+
+New coverage:
+- `scripts/ui-smoke.ps1` — launches the app, drives real OS mouse+keyboard at a
+  form page, asserts click→focus→retained-focus→typing and checkbox toggle.
+- `docs/manual-test-plan.md` — full manual checklist (the WinUI event layer
+  can't be unit-tested).

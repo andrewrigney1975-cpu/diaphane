@@ -9,11 +9,13 @@ using Microsoft.UI.Xaml.Media.Imaging;
 namespace Diaphane.App.Browser;
 
 /// <summary>
-/// Binds one off-screen CEF view to an <see cref="Image"/> inside a host panel:
-/// blits BGRA frames into a <see cref="WriteableBitmap"/> and forwards pointer /
-/// keyboard input. Used for both the page surface and the docked DevTools pane.
+/// Binds one off-screen CEF view to a display <see cref="Image"/> (pointer
+/// target, sized to the frame) hosted inside a focusable <paramref name="host"/>
+/// control (keyboard focus + key events — a bare Image can't hold focus in
+/// WinUI). Blits BGRA frames and forwards pointer / keyboard input. Used for
+/// both the page surface and the docked DevTools pane.
 /// </summary>
-internal sealed class CefSurface(Image image, FrameworkElement host)
+internal sealed class CefSurface(Image image, Control host)
 {
     private IOffscreenBrowserView? _view;
     private WriteableBitmap? _bitmap;
@@ -85,26 +87,31 @@ internal sealed class CefSurface(Image image, FrameworkElement host)
     public void PointerMoved(PointerRoutedEventArgs e) { var (x, y) = Px(e); _view?.SendMouseMove(x, y, false); }
     public void PointerExited(PointerRoutedEventArgs e) { var (x, y) = Px(e); _view?.SendMouseMove(x, y, true); }
 
+    private int _downButton = -1;
+
     public void PointerPressed(PointerRoutedEventArgs e)
     {
-        image.Focus(FocusState.Pointer);
+        host.Focus(FocusState.Pointer);       // route keyboard to the focusable host
         image.CapturePointer(e.Pointer);
         var (x, y) = Px(e);
+        _downButton = ButtonOf(e);
         // OSR: the browser must be told it has focus or clicks won't land DOM
         // focus on form fields and key events are dropped.
         _view?.SetFocus(true);
         _view?.SendMouseMove(x, y, false);
-        _view?.SendMouseButton(x, y, ButtonOf(e), true, 1);
+        _view?.SendMouseButton(x, y, _downButton, true, 1);
     }
 
-    public void GotFocus() => _view?.SetFocus(true);
-    public void LostFocus() => _view?.SetFocus(false);
+    /// <summary>The chrome (address bar, a panel) took focus — blur the page.</summary>
+    public void Blur() => _view?.SetFocus(false);
 
     public void PointerReleased(PointerRoutedEventArgs e)
     {
         image.ReleasePointerCapture(e.Pointer);
         var (x, y) = Px(e);
-        _view?.SendMouseButton(x, y, ButtonOf(e), false, 1);
+        var btn = _downButton >= 0 ? _downButton : ButtonOf(e);
+        _downButton = -1;
+        _view?.SendMouseButton(x, y, btn, false, 1);
     }
 
     public void PointerWheel(PointerRoutedEventArgs e)

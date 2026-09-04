@@ -157,17 +157,20 @@
                 <ColumnDefinition x:Name="DevToolsColumn" Width="0" />
             </Grid.ColumnDefinitions>
 
-            <Grid x:Name="BrowserRegion" Grid.Column="0"
-                  Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                  SizeChanged="OnBrowserRegionChanged">
-                <Image x:Name="BrowserImage" Stretch="None"
-                       HorizontalAlignment="Left" VerticalAlignment="Top"
-                       IsTabStop="True" ManipulationMode="None" UseSystemFocusVisuals="False"
-                       PointerMoved="OnPointerMoved" PointerPressed="OnPointerPressed"
-                       PointerReleased="OnPointerReleased" PointerExited="OnPointerExited"
-                       PointerWheelChanged="OnPointerWheel"
-                       GotFocus="OnPageGotFocus" LostFocus="OnPageLostFocus"
-                       KeyDown="OnKeyDown" KeyUp="OnKeyUp" CharacterReceived="OnChar" />
+            <Grid x:Name="BrowserRegion" Grid.Column="0" SizeChanged="OnBrowserRegionChanged">
+                <ScrollViewer x:Name="BrowserFocus" IsTabStop="True" UseSystemFocusVisuals="False"
+                              HorizontalScrollMode="Disabled" VerticalScrollMode="Disabled"
+                              HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden"
+                              Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                              LostFocus="OnPageLostFocus"
+                              KeyDown="OnKeyDown" KeyUp="OnKeyUp" CharacterReceived="OnChar">
+                    <Image x:Name="BrowserImage" Stretch="None"
+                           HorizontalAlignment="Left" VerticalAlignment="Top"
+                           ManipulationMode="None"
+                           PointerMoved="OnPointerMoved" PointerPressed="OnPointerPressed"
+                           PointerReleased="OnPointerReleased" PointerExited="OnPointerExited"
+                           PointerWheelChanged="OnPointerWheel" />
+                </ScrollViewer>
                 <ProgressBar x:Name="LoadBar" VerticalAlignment="Top" IsIndeterminate="True"
                              Visibility="Collapsed" />
             </Grid>
@@ -179,17 +182,20 @@
                     PointerMoved="OnDevSplitterMoved"
                     PointerReleased="OnDevSplitterReleased" />
 
-            <Grid x:Name="DevToolsRegion" Grid.Column="2"
-                  Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                  SizeChanged="OnDevToolsRegionChanged">
-                <Image x:Name="DevToolsImage" Stretch="None"
-                       HorizontalAlignment="Left" VerticalAlignment="Top"
-                       IsTabStop="True" ManipulationMode="None" UseSystemFocusVisuals="False"
-                       PointerMoved="OnDevPointerMoved" PointerPressed="OnDevPointerPressed"
-                       PointerReleased="OnDevPointerReleased" PointerExited="OnDevPointerExited"
-                       PointerWheelChanged="OnDevPointerWheel"
-                       GotFocus="OnDevGotFocus" LostFocus="OnDevLostFocus"
-                       KeyDown="OnDevKeyDown" KeyUp="OnDevKeyUp" CharacterReceived="OnDevChar" />
+            <Grid x:Name="DevToolsRegion" Grid.Column="2" SizeChanged="OnDevToolsRegionChanged">
+                <ScrollViewer x:Name="DevToolsFocus" IsTabStop="True" UseSystemFocusVisuals="False"
+                              HorizontalScrollMode="Disabled" VerticalScrollMode="Disabled"
+                              HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden"
+                              Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
+                              LostFocus="OnDevLostFocus"
+                              KeyDown="OnDevKeyDown" KeyUp="OnDevKeyUp" CharacterReceived="OnDevChar">
+                    <Image x:Name="DevToolsImage" Stretch="None"
+                           HorizontalAlignment="Left" VerticalAlignment="Top"
+                           ManipulationMode="None"
+                           PointerMoved="OnDevPointerMoved" PointerPressed="OnDevPointerPressed"
+                           PointerReleased="OnDevPointerReleased" PointerExited="OnDevPointerExited"
+                           PointerWheelChanged="OnDevPointerWheel" />
+                </ScrollViewer>
             </Grid>
         </Grid>
 

@@ -20,9 +20,13 @@ Full design: **[Architecture & Roadmap](https://claude.ai/code/artifact/7760756e
 ## Build & test now
 ```
 dotnet test tests/Diaphane.Shell.Tests   # 44 tests, runs against FakeEngine
+dotnet test tests/Diaphane.Core.Tests    # 1 live test (needs the engine build)
+powershell scripts/ui-smoke.ps1          # real mouse+keyboard against a running window
 powershell scripts/package.ps1           # -> dist/diaphane-<version>-win-x64.zip
 dotnet build src/Diaphane.Privacy
 ```
+
+Manual test checklist: `docs/manual-test-plan.md`.
 
 The shell and all its logic build and test on any machine. The ~100 GB Chromium
 checkout is only needed to produce `Diaphane.Core`'s native payload — see `engine/README.md`.

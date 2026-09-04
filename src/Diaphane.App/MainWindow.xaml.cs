@@ -52,8 +52,9 @@ public sealed partial class MainWindow : Window
         Vm.Settings.EngineVersion = $"diaphane {Vm.Settings.Version}  ·  {_cef.Engine.Version}";
         ApplyTheme();
 
-        _page = new CefSurface(BrowserImage, BrowserRegion);
-        _dev = new CefSurface(DevToolsImage, DevToolsRegion);
+        _page = new CefSurface(BrowserImage, BrowserFocus);
+        _dev = new CefSurface(DevToolsImage, DevToolsFocus);
+        Address.GotFocus += (_, _) => { _page.Blur(); _dev.Blur(); };
 
         Root.Loaded += (_, _) =>
         {
@@ -71,6 +72,9 @@ public sealed partial class MainWindow : Window
 
             if (Environment.GetEnvironmentVariable("DIAPHANE_SELFSHOT") is not null)
                 _ = SelfCaptureLoopAsync();
+
+            if (Environment.GetEnvironmentVariable("DIAPHANE_SMOKE") is { Length: > 0 } smokeDir)
+                _ = SmokeHarnessAsync(smokeDir);
         };
         Closed += (_, _) =>
         {
@@ -205,6 +209,40 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    // Support harness for scripts/ui-smoke.ps1: navigate to a fixed form page,
+    // announce readiness, then poll the DOM into a state file the script asserts
+    // on after driving real OS mouse/keyboard input at the page.
+    private async System.Threading.Tasks.Task SmokeHarnessAsync(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        var page = "data:text/html," + Uri.EscapeDataString(
+            "<!doctype html><meta charset=utf-8><body style='margin:0;font:28px sans-serif'>" +
+            "<input id=txt style='position:absolute;left:0;top:0;width:640px;height:90px' " +
+            "onfocus=\"this.dataset.f=1\" onblur=\"this.dataset.f=0\">" +
+            "<input id=chk type=checkbox style='position:absolute;left:0;top:120px;width:60px;height:60px'>" +
+            "<textarea id=ta style='position:absolute;left:0;top:200px;width:640px;height:120px'></textarea>");
+
+        await System.Threading.Tasks.Task.Delay(2500);
+        Vm.ActiveTab?.Navigate(page);
+        await System.Threading.Tasks.Task.Delay(4000);
+        File.WriteAllText(Path.Combine(dir, "ready"), DateTime.Now.ToString("o"));
+
+        for (int i = 0; i < 40; i++)
+        {
+            try
+            {
+                var json = await Vm.ActiveTab!.EvaluateJavaScriptAsync(
+                    "JSON.stringify({txt:txt.value, txtFocused:txt.dataset.f==='1', " +
+                    "active:document.activeElement.id, chk:chk.checked, ta:ta.value})");
+                using var d = System.Text.Json.JsonDocument.Parse(json);
+                File.WriteAllText(Path.Combine(dir, "state.json"),
+                    d.RootElement.GetProperty("result").GetProperty("value").GetString() ?? "{}");
+            }
+            catch { /* keep polling */ }
+            await System.Threading.Tasks.Task.Delay(500);
+        }
+    }
+
     private void OnVmPropertyChanged(object? s, PropertyChangedEventArgs e)
     {
         switch (e.PropertyName)
@@ -293,8 +331,9 @@ public sealed partial class MainWindow : Window
     private void OnKeyDown(object sender, KeyRoutedEventArgs e) => _page.KeyDown(e);
     private void OnKeyUp(object sender, KeyRoutedEventArgs e) => _page.KeyUp(e);
     private void OnChar(UIElement sender, CharacterReceivedRoutedEventArgs e) => _page.Char(e);
-    private void OnPageGotFocus(object sender, RoutedEventArgs e) => _page.GotFocus();
-    private void OnPageLostFocus(object sender, RoutedEventArgs e) => _page.LostFocus();
+    // The page is blurred explicitly when a chrome control takes focus (see the
+    // Address.GotFocus wiring) — not on every LostFocus, which fires transiently.
+    private void OnPageLostFocus(object sender, RoutedEventArgs e) { }
 
     // ---- docked DevTools surface ----
     private void OnDevToolsRegionChanged(object sender, SizeChangedEventArgs e) => _dev.Resize();
@@ -306,8 +345,7 @@ public sealed partial class MainWindow : Window
     private void OnDevKeyDown(object sender, KeyRoutedEventArgs e) => _dev.KeyDown(e);
     private void OnDevKeyUp(object sender, KeyRoutedEventArgs e) => _dev.KeyUp(e);
     private void OnDevChar(UIElement sender, CharacterReceivedRoutedEventArgs e) => _dev.Char(e);
-    private void OnDevGotFocus(object sender, RoutedEventArgs e) => _dev.GotFocus();
-    private void OnDevLostFocus(object sender, RoutedEventArgs e) => _dev.LostFocus();
+    private void OnDevLostFocus(object sender, RoutedEventArgs e) { }
 
     // ---- DevTools pane splitter ----
     private bool _draggingSplitter;
