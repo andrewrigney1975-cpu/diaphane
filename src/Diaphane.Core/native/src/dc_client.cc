@@ -49,6 +49,11 @@ void DcClient::EnsureEvalObserver(dc_eval_cb cb, void* user) {
   static_cast<DcEvalObserver*>(eval_observer_.get())->set_callback(cb, user);
 }
 
+void DcClient::ReleaseDevToolsObserver() {
+  devtools_reg_ = nullptr;
+  eval_observer_ = nullptr;
+}
+
 void DcClient::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
   browser_ = browser;
   // The interpose host window starts hidden (WS_CHILD without WS_VISIBLE); the
@@ -61,6 +66,7 @@ void DcClient::OnAfterCreated(CefRefPtr<CefBrowser> browser) {
 }
 
 void DcClient::OnBeforeClose(CefRefPtr<CefBrowser> browser) {
+  ReleaseDevToolsObserver();
   if (cb_.on_closed) cb_.on_closed(view_id_.c_str(), cb_.user);
   browser_ = nullptr;
 }
@@ -118,8 +124,46 @@ bool DcClient::OnBeforeUnloadDialog(CefRefPtr<CefBrowser> browser,
   return true;
 }
 
+bool DcClient::OnFileDialog(CefRefPtr<CefBrowser> browser, FileDialogMode mode,
+                           const CefString& title, const CefString& default_file_path,
+                           const std::vector<CefString>& accept_filters,
+                           const std::vector<CefString>& accept_extensions,
+                           const std::vector<CefString>& accept_descriptions,
+                           CefRefPtr<CefFileDialogCallback> callback) {
+  callback->Cancel();
+  return true;
+}
+
 void DcClient::GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rect) {
   rect.Set(0, 0, width_ > 0 ? width_ : 1280, height_ > 0 ? height_ : 800);
+}
+
+bool DcClient::GetScreenInfo(CefRefPtr<CefBrowser> browser, CefScreenInfo& info) {
+  info.device_scale_factor = 1.0f;
+  info.depth = 32;
+  info.depth_per_component = 8;
+  info.is_monochrome = false;
+  info.rect.x = info.rect.y = 0;
+  info.rect.width = width_ > 0 ? width_ : 1280;
+  info.rect.height = height_ > 0 ? height_ : 800;
+  info.available_rect = info.rect;
+  return true;
+}
+
+bool DcClient::GetScreenPoint(CefRefPtr<CefBrowser> browser, int viewX, int viewY,
+                              int& screenX, int& screenY) {
+  screenX = viewX;
+  screenY = viewY;
+  return true;
+}
+
+void DcClient::OnPopupShow(CefRefPtr<CefBrowser> browser, bool show) {
+  popup_open_ = show;
+  if (!show) popup_rect_.Set(0, 0, 0, 0);
+}
+
+void DcClient::OnPopupSize(CefRefPtr<CefBrowser> browser, const CefRect& rect) {
+  popup_rect_ = rect;
 }
 
 void DcClient::OnPaint(CefRefPtr<CefBrowser> browser, PaintElementType type,

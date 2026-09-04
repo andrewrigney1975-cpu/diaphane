@@ -354,3 +354,32 @@ download page" link. (Consistent with the no-silent-update golden rule.)
 csproj (0.10.0) drives the zip name and the settings "About" line.
 
 44 shell tests green.
+
+---
+
+# Live test: OSR input pipeline vs. every form control
+
+`tests/Diaphane.Core.Tests/LiveEngineTests.cs` — the single live end-to-end test
+(CEF initialises once per process, so the old HeadlessLoadTests folded in here).
+On one STA thread / one engine it checks: the bridge version, a title callback,
+and then drives **every kind of HTML form control** through
+SetFocus → click → key/char and reads the result back via Runtime.evaluate:
+
+  text · password · email · search · tel · url · number · date · time · month ·
+  week · datetime-local · checkbox · radio · range · color · file · submit ·
+  reset · button · textarea · select · contenteditable  — 24/24.
+
+Native changes this surfaced (all kept — they matter for real use):
+- `DcClient : CefDialogHandler` — `OnFileDialog` cancels (OSR has no window to
+  parent an OS dialog to; the shell will drive file picking itself later).
+- `GetScreenInfo` / `GetScreenPoint` implemented, and `OnPopupShow` /
+  `OnPopupSize` tracked — without them `<select>` etc. hit
+  `web_contents_view_osr GetNativeView() NOTIMPLEMENTED` and crashed on teardown
+  (dangling raw_ptr).
+- `ReleaseDevToolsObserver()` now runs *before* `CloseBrowser` in `dc_view_close`
+  / `dc_shutdown` / `OnBeforeClose` — the `CefRegistration` dtor must not touch a
+  half-closed browser.
+
+Still open: `<select>` / date-picker dropdowns paint via `PET_POPUP`, which the
+shell doesn't composite yet, so the dropdown isn't visible (keyboard still
+works); `<input type=file>` needs wiring to a real WinUI file picker.

@@ -5,6 +5,7 @@
 
 #include "include/cef_client.h"
 #include "include/cef_devtools_message_observer.h"
+#include "include/cef_dialog_handler.h"
 #include "include/cef_jsdialog_handler.h"
 #include "include/cef_registration.h"
 #include "include/diaphane_core.h"
@@ -16,6 +17,7 @@ class DcClient : public CefClient,
                  public CefLoadHandler,
                  public CefDisplayHandler,
                  public CefJSDialogHandler,
+                 public CefDialogHandler,
                  public CefRenderHandler {
  public:
   DcClient(std::string view_id, dc_view_callbacks cb, int width, int height);
@@ -29,11 +31,17 @@ class DcClient : public CefClient,
   // results to |cb|. Safe to call repeatedly (updates the callback).
   void EnsureEvalObserver(dc_eval_cb cb, void* user);
 
+  // Drop the DevTools message observer registration. MUST run before the
+  // browser is torn down — the CefRegistration dtor otherwise touches a
+  // half-closed browser (dangling raw_ptr).
+  void ReleaseDevToolsObserver();
+
   // CefClient
   CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override { return this; }
   CefRefPtr<CefLoadHandler> GetLoadHandler() override { return this; }
   CefRefPtr<CefDisplayHandler> GetDisplayHandler() override { return this; }
   CefRefPtr<CefJSDialogHandler> GetJSDialogHandler() override { return this; }
+  CefRefPtr<CefDialogHandler> GetDialogHandler() override { return this; }
   CefRefPtr<CefRenderHandler> GetRenderHandler() override { return this; }
 
   // CefLifeSpanHandler
@@ -62,8 +70,22 @@ class DcClient : public CefClient,
                             const CefString& message_text, bool is_reload,
                             CefRefPtr<CefJSDialogCallback> callback) override;
 
+  // CefDialogHandler — OSR has no window to parent an OS file dialog to. The
+  // shell will drive file selection itself later; for now, cancel.
+  bool OnFileDialog(CefRefPtr<CefBrowser> browser, FileDialogMode mode,
+                    const CefString& title, const CefString& default_file_path,
+                    const std::vector<CefString>& accept_filters,
+                    const std::vector<CefString>& accept_extensions,
+                    const std::vector<CefString>& accept_descriptions,
+                    CefRefPtr<CefFileDialogCallback> callback) override;
+
   // CefRenderHandler (windowless / OSR)
   void GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rect) override;
+  bool GetScreenInfo(CefRefPtr<CefBrowser> browser, CefScreenInfo& info) override;
+  bool GetScreenPoint(CefRefPtr<CefBrowser> browser, int viewX, int viewY,
+                      int& screenX, int& screenY) override;
+  void OnPopupShow(CefRefPtr<CefBrowser> browser, bool show) override;
+  void OnPopupSize(CefRefPtr<CefBrowser> browser, const CefRect& rect) override;
   void OnPaint(CefRefPtr<CefBrowser> browser, PaintElementType type,
                const RectList& dirtyRects, const void* buffer,
                int width, int height) override;
@@ -81,6 +103,8 @@ class DcClient : public CefClient,
 
   CefRefPtr<CefDevToolsMessageObserver> eval_observer_;
   CefRefPtr<CefRegistration> devtools_reg_;   // keeps the observer registered
+  CefRect popup_rect_;                        // <select> etc. dropdown, when open
+  bool popup_open_ = false;
 
   IMPLEMENT_REFCOUNTING(DcClient);
   DISALLOW_COPY_AND_ASSIGN(DcClient);

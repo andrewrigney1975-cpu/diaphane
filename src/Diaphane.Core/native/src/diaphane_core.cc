@@ -165,6 +165,7 @@ void dc_pump(void) {
 void dc_shutdown(void) {
   if (!g_initialized) return;
   for (auto& kv : g_views) {
+    kv.second->ReleaseDevToolsObserver();
     if (auto b = kv.second->browser())
       b->GetHost()->CloseBrowser(true);
   }
@@ -350,6 +351,7 @@ void dc_view_set_focus(const char* view_id, int32_t focused) {
 void dc_view_close(const char* view_id) {
   auto c = LookupView(view_id);
   if (!c) return;
+  c->ReleaseDevToolsObserver();   // before CloseBrowser: its dtor must not run on a closing browser
   if (auto b = c->browser()) b->GetHost()->CloseBrowser(true);
 #if defined(_WIN32)
   auto hit = g_view_hosts.find(view_id);
