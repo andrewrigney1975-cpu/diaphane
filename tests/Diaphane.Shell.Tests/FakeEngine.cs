@@ -84,6 +84,7 @@ public sealed class FakeView : IOffscreenBrowserView
     public void SendMouseButton(int x, int y, int button, bool down, int clickCount) { }
     public void SendMouseWheel(int x, int y, int deltaX, int deltaY) { }
     public void SendKey(bool isDown, int windowsKeyCode, int nativeKeyCode, uint modifiers, char character) { }
+    public void StartDownload(string url) { }
 
     public void Dispose() { }
 
@@ -92,5 +93,6 @@ public sealed class FakeView : IOffscreenBrowserView
     public event EventHandler<string>? FaviconUrlChanged { add { } remove { } }
     public event EventHandler<DownloadProgress>? DownloadUpdated { add { } remove { } }
     public event EventHandler<string>? PopupRequested { add { } remove { } }
+    public event EventHandler<ContextMenuInfo>? ContextMenuRequested { add { } remove { } }
     public event EventHandler<FramePaint>? FramePainted { add { } remove { } }
 }

@@ -90,6 +90,18 @@ public interface IBrowserView : IDisposable
     /// support; a build without it just cancels silently.
     /// </summary>
     event EventHandler<string>? PopupRequested;
+
+    /// <summary>
+    /// Raised on right-click with what was clicked. The engine always suppresses its own
+    /// context menu (no native chrome to host it in) — the shell shows its own and acts on
+    /// the result via <see cref="StartDownload"/>. Requires an engine build with context-menu
+    /// support; a build without it just shows no menu at all.
+    /// </summary>
+    event EventHandler<ContextMenuInfo>? ContextMenuRequested;
+
+    /// <summary>Explicitly download <paramref name="url"/> — "Save link/image/video as…".
+    /// Goes through the same pipeline as a page-initiated download.</summary>
+    void StartDownload(string url);
 }
 
 public sealed record NavigationState(string Url, string Title, bool IsLoading, bool CanGoBack, bool CanGoForward, double Progress);
@@ -99,6 +111,13 @@ public enum DownloadState { InProgress, Complete, Cancelled, Interrupted }
 public sealed record DownloadProgress(
     long NativeId, string Url, string FileName, string FilePath,
     long ReceivedBytes, long TotalBytes, DownloadState State);
+
+public enum ContextMenuKind { None, Link, Image, Video, Audio }
+
+/// <summary>What was right-clicked, and where (view-local pixels, for positioning the shell's
+/// own menu). <see cref="LinkUrl"/> is set whenever the click landed on/inside a hyperlink,
+/// independent of <see cref="Kind"/>; <see cref="SrcUrl"/> is the media resource for Image/Video/Audio.</summary>
+public sealed record ContextMenuInfo(ContextMenuKind Kind, string LinkUrl, string SrcUrl, int X, int Y);
 
 /// <summary>Off-screen-rendered browser: the shell owns the surface and forwards input.</summary>
 public interface IOffscreenBrowserView : IBrowserView

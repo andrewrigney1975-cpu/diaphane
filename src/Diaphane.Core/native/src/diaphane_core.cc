@@ -484,6 +484,14 @@ void dc_view_set_popup_cb(const char* view_id, dc_popup_cb cb, void* user) {
   if (auto c = LookupView(view_id)) c->SetPopupCallback(cb, user);
 }
 
+void dc_view_set_context_menu_cb(const char* view_id, dc_context_menu_cb cb, void* user) {
+  if (auto c = LookupView(view_id)) c->SetContextMenuCallback(cb, user);
+}
+
+void dc_view_start_download(const char* view_id, const char* url) {
+  if (auto b = LookupBrowser(view_id); b && url) b->GetHost()->StartDownload(CefString(url));
+}
+
 const char* dc_version(void) {
   if (g_version_str.empty())
     g_version_str = std::string("CEF ") + CEF_VERSION;

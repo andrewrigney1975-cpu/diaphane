@@ -4,11 +4,13 @@
 #include <string>
 
 #include "include/cef_client.h"
+#include "include/cef_context_menu_handler.h"
 #include "include/cef_devtools_message_observer.h"
 #include "include/cef_dialog_handler.h"
 #include "include/cef_download_handler.h"
 #include "include/cef_jsdialog_handler.h"
 #include "include/cef_registration.h"
+#include "include/cef_request_handler.h"
 #include "include/diaphane_core.h"
 
 // Implemented in diaphane_core.cc (owns dc_set_default_download_dir's state).
@@ -24,6 +26,8 @@ class DcClient : public CefClient,
                  public CefJSDialogHandler,
                  public CefDialogHandler,
                  public CefDownloadHandler,
+                 public CefContextMenuHandler,
+                 public CefRequestHandler,
                  public CefRenderHandler {
  public:
   DcClient(std::string view_id, dc_view_callbacks cb, int width, int height);
@@ -47,6 +51,7 @@ class DcClient : public CefClient,
   // additive to the native ABI. Null clears it.
   void SetDownloadCallback(dc_download_cb cb, void* user) { download_cb_ = cb; download_user_ = user; }
   void SetPopupCallback(dc_popup_cb cb, void* user) { popup_cb_ = cb; popup_user_ = user; }
+  void SetContextMenuCallback(dc_context_menu_cb cb, void* user) { context_menu_cb_ = cb; context_menu_user_ = user; }
 
   // CefClient
   CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override { return this; }
@@ -55,6 +60,8 @@ class DcClient : public CefClient,
   CefRefPtr<CefJSDialogHandler> GetJSDialogHandler() override { return this; }
   CefRefPtr<CefDialogHandler> GetDialogHandler() override { return this; }
   CefRefPtr<CefDownloadHandler> GetDownloadHandler() override { return this; }
+  CefRefPtr<CefContextMenuHandler> GetContextMenuHandler() override { return this; }
+  CefRefPtr<CefRequestHandler> GetRequestHandler() override { return this; }
   CefRefPtr<CefRenderHandler> GetRenderHandler() override { return this; }
 
   // CefLifeSpanHandler
@@ -115,6 +122,24 @@ class DcClient : public CefClient,
                          CefRefPtr<CefDownloadItem> download_item,
                          CefRefPtr<CefDownloadItemCallback> callback) override;
 
+  // CefContextMenuHandler — no native menu chrome to host CEF's own in (same reasoning
+  // as OnFileDialog/OnBeforePopup). OnBeforeContextMenu reports what was clicked to the
+  // shell; RunContextMenu then unconditionally declines to show anything itself.
+  void OnBeforeContextMenu(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
+                           CefRefPtr<CefContextMenuParams> params,
+                           CefRefPtr<CefMenuModel> model) override;
+  bool RunContextMenu(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
+                      CefRefPtr<CefContextMenuParams> params, CefRefPtr<CefMenuModel> model,
+                      CefRefPtr<CefRunContextMenuCallback> callback) override;
+
+  // CefRequestHandler — middle-click / ctrl+click "open in new tab" navigations arrive
+  // here (not through OnBeforePopup, which is window.open()/target=_blank only). Reuses
+  // the same popup_cb_ the shell already listens on to open a real tab.
+  bool OnOpenURLFromTab(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
+                       const CefString& target_url,
+                       CefRequestHandler::WindowOpenDisposition target_disposition,
+                       bool user_gesture) override;
+
   // CefRenderHandler (windowless / OSR)
   void GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rect) override;
   bool GetScreenInfo(CefRefPtr<CefBrowser> browser, CefScreenInfo& info) override;
@@ -146,6 +171,8 @@ class DcClient : public CefClient,
   void* download_user_ = nullptr;
   dc_popup_cb popup_cb_ = nullptr;
   void* popup_user_ = nullptr;
+  dc_context_menu_cb context_menu_cb_ = nullptr;
+  void* context_menu_user_ = nullptr;
 
   IMPLEMENT_REFCOUNTING(DcClient);
   DISALLOW_COPY_AND_ASSIGN(DcClient);

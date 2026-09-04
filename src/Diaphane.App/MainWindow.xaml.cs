@@ -333,11 +333,57 @@ public sealed partial class MainWindow : Window
     }
 
     // ---- surface wiring ----
+    private TabModel? _contextMenuSubscribedTab;
+
     private void AttachActiveView()
     {
         _page.Attach(Vm.ActiveTab?.Offscreen);
         // DevTools belongs to a specific tab — drop it when switching tabs.
         if (Vm.ShowDevTools) Vm.ShowDevTools = false;
+
+        if (_contextMenuSubscribedTab is not null)
+            _contextMenuSubscribedTab.ContextMenuRequested -= OnPageContextMenuRequested;
+        _contextMenuSubscribedTab = Vm.ActiveTab;
+        if (_contextMenuSubscribedTab is not null)
+            _contextMenuSubscribedTab.ContextMenuRequested += OnPageContextMenuRequested;
+    }
+
+    // ---- right-click on page content: Save link/image/video/audio as… ----
+    private void OnPageContextMenuRequested(object? sender, ContextMenuInfo info)
+    {
+        var tab = sender as TabModel ?? Vm.ActiveTab;
+        if (tab is null) return;
+
+        var flyout = new MenuFlyout();
+        switch (info.Kind)
+        {
+            case ContextMenuKind.Image:
+                AddSaveItem(flyout, "Save image as…", info.SrcUrl, tab);
+                break;
+            case ContextMenuKind.Video:
+                AddSaveItem(flyout, "Save video as…", info.SrcUrl, tab);
+                break;
+            case ContextMenuKind.Audio:
+                AddSaveItem(flyout, "Save audio as…", info.SrcUrl, tab);
+                break;
+        }
+        if (info.LinkUrl.Length > 0)
+            AddSaveItem(flyout, "Save link as…", info.LinkUrl, tab);
+
+        if (flyout.Items.Count == 0) return; // plain right-click on text/background — nothing to offer
+
+        var scale = Root.XamlRoot?.RasterizationScale ?? 1.0;
+        flyout.ShowAt(BrowserImage, new FlyoutShowOptions
+        {
+            Position = new Windows.Foundation.Point(info.X / scale, info.Y / scale),
+        });
+    }
+
+    private static void AddSaveItem(MenuFlyout flyout, string text, string url, TabModel tab)
+    {
+        var item = new MenuFlyoutItem { Text = text };
+        item.Click += (_, _) => tab.StartDownload(url);
+        flyout.Items.Add(item);
     }
 
     private async void UpdateDevToolsPane()
@@ -719,7 +765,7 @@ public sealed partial class MainWindow : Window
         SelectActiveInStrip();
     }
 
-    private static TabViewItem BuildTabItem(TabModel t)
+    private TabViewItem BuildTabItem(TabModel t)
     {
         var icon = new FontIcon
         {
@@ -739,7 +785,18 @@ public sealed partial class MainWindow : Window
         var panel = new StackPanel { Orientation = Orientation.Horizontal };
         panel.Children.Add(icon);
         panel.Children.Add(text);
-        return new TabViewItem { Header = panel, Tag = t };
+        var item = new TabViewItem { Header = panel, Tag = t };
+        item.PointerPressed += OnTabItemPointerPressed;
+        return item;
+    }
+
+    // Middle-click anywhere on a tab closes it, same as every other browser.
+    private void OnTabItemPointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is not TabViewItem { Tag: TabModel t } item) return;
+        if (!e.GetCurrentPoint(item).Properties.IsMiddleButtonPressed) return;
+        e.Handled = true;
+        Vm.CloseTab(t);
     }
 
     private void OnTabModelPropertyChanged(object? sender, PropertyChangedEventArgs e)

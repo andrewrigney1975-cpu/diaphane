@@ -182,6 +182,22 @@ internal static partial class NativeMethods
     internal static extern void dc_view_set_popup_cb(
         [MarshalAs(UnmanagedType.LPUTF8Str)] string viewId, PopupCb cb, IntPtr user);
 
+    // ---- context menu ----
+    // Additive/optional, same rationale as the download surface above.
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    internal delegate void ContextMenuCb(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string viewId, int kind,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string linkUrl,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string srcUrl,
+        int x, int y, IntPtr user);
+
+    [DllImport(Dll, CallingConvention = CallingConvention.Cdecl, CharSet = CharSet.Ansi)]
+    internal static extern void dc_view_set_context_menu_cb(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string viewId, ContextMenuCb cb, IntPtr user);
+
+    [LibraryImport(Dll, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial void dc_view_start_download(string viewId, string url);
+
     [LibraryImport(Dll)]
     internal static partial IntPtr dc_version();
 

@@ -185,6 +185,54 @@ void DcClient::OnDownloadUpdated(CefRefPtr<CefBrowser> browser,
               download_item->GetTotalBytes(), DownloadStateOf(download_item), download_user_);
 }
 
+void DcClient::OnBeforeContextMenu(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
+                                   CefRefPtr<CefContextMenuParams> params,
+                                   CefRefPtr<CefMenuModel> model) {
+  model->Clear();  // no native chrome to show CEF's own menu in
+  if (!context_menu_cb_) return;
+
+  std::string link = params->GetLinkUrl().ToString();
+  std::string src;
+  int32_t kind = 0;
+  switch (params->GetMediaType()) {
+    case CM_MEDIATYPE_IMAGE:
+      kind = 2;
+      src = params->GetSourceUrl().ToString();
+      break;
+    case CM_MEDIATYPE_VIDEO:
+      kind = 3;
+      src = params->GetSourceUrl().ToString();
+      break;
+    case CM_MEDIATYPE_AUDIO:
+      kind = 4;
+      src = params->GetSourceUrl().ToString();
+      break;
+    default:
+      if (!link.empty()) kind = 1;
+      break;
+  }
+  context_menu_cb_(view_id_.c_str(), kind, link.c_str(), src.c_str(),
+                   params->GetXCoord(), params->GetYCoord(), context_menu_user_);
+}
+
+bool DcClient::RunContextMenu(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
+                              CefRefPtr<CefContextMenuParams> params,
+                              CefRefPtr<CefMenuModel> model,
+                              CefRefPtr<CefRunContextMenuCallback> callback) {
+  callback->Cancel();  // OnBeforeContextMenu already reported the click, if anyone's listening
+  return true;
+}
+
+bool DcClient::OnOpenURLFromTab(CefRefPtr<CefBrowser> browser, CefRefPtr<CefFrame> frame,
+                                const CefString& target_url,
+                                CefRequestHandler::WindowOpenDisposition target_disposition,
+                                bool user_gesture) {
+  if (target_disposition == CEF_WOD_CURRENT_TAB) return false;  // ordinary navigation
+  if (popup_cb_ && !target_url.empty())
+    popup_cb_(view_id_.c_str(), target_url.ToString().c_str(), popup_user_);
+  return true;  // cancel in the source tab — the shell opens it as a real tab instead
+}
+
 void DcClient::GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rect) {
   rect.Set(0, 0, width_ > 0 ? width_ : 1280, height_ > 0 ? height_ : 800);
 }

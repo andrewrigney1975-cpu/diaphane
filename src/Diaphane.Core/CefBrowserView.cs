@@ -18,6 +18,7 @@ internal sealed class CefBrowserView : IOffscreenBrowserView
     private readonly EvalCb _evalCb;
     private readonly DownloadCb _downloadCb;
     private readonly PopupCb _popupCb;
+    private readonly ContextMenuCb _contextMenuCb;
     private readonly Dictionary<int, TaskCompletionSource<string>> _pendingEvals = new();
 
     private NavigationState _state = new("about:blank", "", true, false, false, 0);
@@ -36,6 +37,7 @@ internal sealed class CefBrowserView : IOffscreenBrowserView
     public event EventHandler<string>? FaviconUrlChanged;
     public event EventHandler<DownloadProgress>? DownloadUpdated;
     public event EventHandler<string>? PopupRequested;
+    public event EventHandler<ContextMenuInfo>? ContextMenuRequested;
     public event EventHandler<FramePaint>? FramePainted;
 
     public CefBrowserView(string contextId, nint hostHwnd, int width = 1280, int height = 800)
@@ -52,6 +54,9 @@ internal sealed class CefBrowserView : IOffscreenBrowserView
 
         try { dc_view_set_popup_cb(NativeId, _popupCb, IntPtr.Zero); }
         catch (EntryPointNotFoundException) { /* popups just get cancelled on this engine build */ }
+
+        try { dc_view_set_context_menu_cb(NativeId, _contextMenuCb, IntPtr.Zero); }
+        catch (EntryPointNotFoundException) { /* right-click just shows no menu on this engine build */ }
     }
 
     /// <summary>Roots all the CEF callback delegates; leaves <see cref="NativeId"/> unset.</summary>
@@ -97,6 +102,8 @@ internal sealed class CefBrowserView : IOffscreenBrowserView
             DownloadUpdated?.Invoke(this, new DownloadProgress(
                 downloadId, url, fileName, filePath, received, total, (DownloadState)state));
         _popupCb = (_, targetUrl, _) => PopupRequested?.Invoke(this, targetUrl);
+        _contextMenuCb = (_, kind, linkUrl, srcUrl, x, y, _) =>
+            ContextMenuRequested?.Invoke(this, new ContextMenuInfo((ContextMenuKind)kind, linkUrl, srcUrl, x, y));
 
         _cb = new ViewCallbacks
         {
@@ -166,6 +173,12 @@ internal sealed class CefBrowserView : IOffscreenBrowserView
     public void SendKey(bool isDown, int windowsKeyCode, int nativeKeyCode, uint modifiers, char character) =>
         dc_view_key(NativeId, isDown ? 1 : 0, windowsKeyCode, nativeKeyCode, modifiers, character);
 
+    public void StartDownload(string url)
+    {
+        try { dc_view_start_download(NativeId, url); }
+        catch (EntryPointNotFoundException) { /* not supported on this engine build */ }
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
@@ -174,5 +187,6 @@ internal sealed class CefBrowserView : IOffscreenBrowserView
         GC.KeepAlive(_cb);
         GC.KeepAlive(_downloadCb);
         GC.KeepAlive(_popupCb);
+        GC.KeepAlive(_contextMenuCb);
     }
 }

@@ -46,6 +46,15 @@ public sealed class TabModel : INotifyPropertyChanged
         remove => _view.PopupRequested -= value;
     }
 
+    /// <summary>Forwarded from the underlying view — see <see cref="IBrowserView.ContextMenuRequested"/>.</summary>
+    public event EventHandler<ContextMenuInfo>? ContextMenuRequested
+    {
+        add => _view.ContextMenuRequested += value;
+        remove => _view.ContextMenuRequested -= value;
+    }
+
+    public void StartDownload(string url) => _view.StartDownload(url);
+
     public string Title { get => _title; private set => Set(ref _title, value); }
     public string Url { get => _url; private set => Set(ref _url, value); }
     public bool IsLoading { get => _isLoading; private set => Set(ref _isLoading, value); }

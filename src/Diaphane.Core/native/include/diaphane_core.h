@@ -148,6 +148,22 @@ DC_API void dc_set_default_download_dir(const char* dir);
 typedef void (*dc_popup_cb)(const char* view_id, const char* target_url, void* user);
 DC_API void dc_view_set_popup_cb(const char* view_id, dc_popup_cb cb, void* user);
 
+// ---- context menu ----
+// Fired on right-click; the native side always suppresses CEF's own context menu (no
+// native chrome to host it in — same reasoning as OnFileDialog/OnBeforePopup), so the
+// shell is expected to show its own and act on the result via dc_view_start_download.
+// kind: 0=none (plain right-click) 1=link 2=image 3=video 4=audio.
+// |link_url| is set whenever the click was on/inside a hyperlink (independent of kind);
+// |src_url| is the image/video/audio resource url for kind 2-4.
+typedef void (*dc_context_menu_cb)(const char* view_id, int32_t kind,
+                                   const char* link_url, const char* src_url,
+                                   int32_t x, int32_t y, void* user);
+DC_API void dc_view_set_context_menu_cb(const char* view_id, dc_context_menu_cb cb, void* user);
+
+// Explicitly start a download of |url| (e.g. "Save link/image/video as…") — goes through
+// the same OnBeforeDownload/dc_view_set_download_cb path as a page-initiated download.
+DC_API void dc_view_start_download(const char* view_id, const char* url);
+
 // ---- diagnostics ----
 DC_API const char* dc_version(void);   // "CEF x.y.z / Chromium a.b.c.d"
 
