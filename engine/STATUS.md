@@ -223,3 +223,43 @@ CEF close its block-file HTTP cache cleanly and corrupts it
 (`backend_impl.cc:1869 Destroying invalid entry` flood). Delete
 `%LOCALAPPDATA%\Diaphane\UserData\Default\Cache` if that happens; normal
 window-close shuts down cleanly via `Engine.Dispose()`.
+
+---
+
+# M7 — Privacy dashboard + clear-data  ✅
+
+- `Diaphane.Privacy`: `ClearTimeRange` (hour/day/week/4wk/all → cut-off instant),
+  `PrivacySettings` + `PrivacySettingsStore` (one JSON file, never throws),
+  `PrivacyService` (range→cutoff, drives the existing `DataClearer`, persists
+  `ClearOnExit` and the default scope/range).
+- `PrivacyViewModel` + `diaphane://privacy` overlay panel: five scope checkboxes
+  (cookies / site storage / http cache / history / DNS+connections), a time-range
+  combo, "Clear now", and "clear … every time diaphane closes".
+- Toolbar shield button, `Ctrl+Shift+Del`; `diaphane://privacy` and
+  `diaphane://settings` in the omnibox open the panel.
+- Clear-on-exit runs from the window `Closed` handler before engine shutdown.
+- 9 `PrivacyService` tests.
+
+# M8 — Extensions  ✅ (management + startup load)
+
+- `Diaphane.Shell.Extensions.ExtensionManifest`: parses `manifest.json`
+  (comments + trailing commas tolerated), pulls name/version/permissions/
+  update_url, and derives Chromium's unpacked-extension id (SHA-256 of the
+  UTF-16LE path, first 16 bytes → a–p alphabet).
+- `Diaphane.Data.ExtensionStore` (SQLite): id/path/name/version/enabled/perms.
+  `EnabledPaths()` feeds the engine.
+- ABI: `dc_settings.extension_dirs` (';'-separated) → `DcApp` appends
+  `--load-extension=<csv>` in `OnBeforeCommandLineProcessing`. **No `update_url`
+  is ever contacted** — matches the "no silent auto-update" golden rule.
+- `CefRequestContext.LoadExtensionAsync` parses the manifest and records it;
+  the extension actually loads on the next launch (like Chrome's
+  `--load-extension`), surfaced in the UI as "restart to apply".
+- `ExtensionsViewModel` + `diaphane://extensions` panel: list with per-row
+  enable/disable + remove, "Load unpacked…" (folder picker), and a manual
+  "Check for updates" that only re-reads the folder on disk.
+- Toolbar puzzle button, `Ctrl+Shift+E`.
+- 8 manifest/store tests. 30 shell tests green total.
+
+Not yet done for M8: content-script / background-page runtime validation against
+a real page (needs the engine + a test extension), CRX (packed) install,
+per-Sandbox-context extension isolation.

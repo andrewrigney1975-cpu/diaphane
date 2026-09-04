@@ -58,6 +58,7 @@ internal static partial class NativeMethods
         [MarshalAs(UnmanagedType.LPUTF8Str)] public string? UserAgent;
         public int Windowless;
         public int NoSandbox;
+        [MarshalAs(UnmanagedType.LPUTF8Str)] public string? ExtensionDirs;
     }
 
     // Structs with string / delegate fields aren't supported by [LibraryImport] source-gen;

@@ -58,6 +58,7 @@ typedef struct dc_settings {
   const char* user_agent;        // optional; null = CEF default
   int32_t     windowless;        // 1 = off-screen rendering (headless), 0 = windowed
   int32_t     no_sandbox;        // 1 = disable the CEF sandbox (tests only)
+  const char* extension_dirs;    // optional; ';'-separated unpacked-extension dirs to --load-extension
 } dc_settings;
 
 // ---- lifecycle ----

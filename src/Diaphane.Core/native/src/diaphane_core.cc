@@ -100,6 +100,8 @@ int32_t dc_initialize(const dc_settings* s,
   g_app->SetPumpCallback(pump_cb, pump_user);
   if (s->root_cache_dir && *s->root_cache_dir)
     g_app->SetUserDataDir(CefString(s->root_cache_dir));
+  if (s->extension_dirs && *s->extension_dirs)
+    g_app->SetExtensionDirs(s->extension_dirs);
 
   // Even in the browser process CEF wants this called first (early init). It
   // returns >= 0 only when this process is actually a sub-process, which it

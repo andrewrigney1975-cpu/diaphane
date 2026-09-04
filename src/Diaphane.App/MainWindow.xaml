@@ -4,6 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:controls="using:Microsoft.UI.Xaml.Controls"
     xmlns:local="using:Diaphane.App"
+    xmlns:browser="using:Diaphane.App.Browser"
     xmlns:tabs="using:Diaphane.Shell.Tabs"
     xmlns:data="using:Diaphane.Data">
 
@@ -35,6 +36,7 @@
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="Auto" />
@@ -95,7 +97,10 @@
             <Button Grid.Column="7" Command="{x:Bind Vm.ToggleBookmarksBarCommand}" ToolTipService.ToolTip="Bookmarks bar (Ctrl+Shift+B)">
                 <FontIcon Glyph="&#xE8A4;" FontSize="14" />
             </Button>
-            <Button Grid.Column="8" Command="{x:Bind Vm.TogglePrivacyPanelCommand}" ToolTipService.ToolTip="Clear browsing data (Ctrl+Shift+Del)">
+            <Button Grid.Column="8" Command="{x:Bind Vm.ToggleExtensionsPanelCommand}" ToolTipService.ToolTip="Extensions (Ctrl+Shift+E)">
+                <FontIcon Glyph="&#xEA86;" FontSize="14" />
+            </Button>
+            <Button Grid.Column="9" Command="{x:Bind Vm.TogglePrivacyPanelCommand}" ToolTipService.ToolTip="Clear browsing data (Ctrl+Shift+Del)">
                 <FontIcon Glyph="&#xE72E;" FontSize="14" />
             </Button>
         </Grid>
@@ -186,6 +191,78 @@
                     <CheckBox Content="Clear cookies, cache, storage and history every time diaphane closes"
                               IsChecked="{x:Bind Vm.Privacy.ClearOnExit, Mode=TwoWay}" />
                 </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- diaphane://extensions -->
+        <Grid Grid.Row="3" Background="#99000000"
+              Visibility="{x:Bind local:MainWindow.VisIf(Vm.ShowExtensionsPanel), Mode=OneWay}">
+            <Border MaxWidth="560" MaxHeight="620" Margin="24" Padding="24" VerticalAlignment="Top"
+                    HorizontalAlignment="Center"
+                    Background="{ThemeResource LayerFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
+                    CornerRadius="8">
+                <Grid RowSpacing="12">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="Extensions" FontSize="18" FontWeight="SemiBold" />
+
+                    <TextBlock Grid.Row="1" TextWrapping="Wrap"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               Text="Load an unpacked extension folder (one containing manifest.json). diaphane never fetches or updates extensions on its own." />
+
+                    <InfoBar Grid.Row="2" IsOpen="{x:Bind Vm.Extensions.RestartNeeded, Mode=OneWay}"
+                             Severity="Informational" IsClosable="False"
+                             Message="Restart diaphane to apply extension changes." />
+
+                    <ScrollViewer Grid.Row="3" VerticalScrollBarVisibility="Auto" MinHeight="80">
+                        <ItemsControl ItemsSource="{x:Bind Vm.Extensions.Items, Mode=OneWay}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="browser:ExtensionRow">
+                                    <Border Padding="12" Margin="0,0,0,8" CornerRadius="6"
+                                            Background="{ThemeResource LayerFillColorAltBrush}">
+                                        <Grid ColumnSpacing="12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <ToggleSwitch Grid.Column="0" MinWidth="0"
+                                                          IsOn="{x:Bind Enabled, Mode=TwoWay}" />
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock Text="{x:Bind Name}" FontWeight="SemiBold" />
+                                                <TextBlock FontSize="12" Opacity="0.7" Text="{x:Bind Version, Mode=OneWay}" />
+                                                <TextBlock FontSize="11" Opacity="0.55" TextWrapping="Wrap"
+                                                           Text="{x:Bind Permissions}" />
+                                            </StackPanel>
+                                            <Button Grid.Column="2" Content="Remove"
+                                                    Click="OnRemoveExtensionClick" Tag="{x:Bind}"
+                                                    VerticalAlignment="Center" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <StackPanel Grid.Row="4" Spacing="8">
+                        <TextBlock Text="{x:Bind Vm.Extensions.Status, Mode=OneWay}" TextWrapping="Wrap"
+                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                   Visibility="{x:Bind local:MainWindow.VisIfText(Vm.Extensions.Status), Mode=OneWay}" />
+                        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                            <Button Content="Close" Command="{x:Bind Vm.CloseExtensionsPanelCommand}" />
+                            <Button Content="Check for updates" Command="{x:Bind Vm.Extensions.CheckForUpdatesCommand}" />
+                            <Button Content="Load unpacked…" Style="{ThemeResource AccentButtonStyle}"
+                                    Click="OnLoadUnpackedClick" />
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
             </Border>
         </Grid>
     </Grid>

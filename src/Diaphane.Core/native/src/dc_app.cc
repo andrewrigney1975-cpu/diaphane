@@ -32,6 +32,15 @@ void DcApp::OnBeforeCommandLineProcessing(const CefString& process_type,
     command_line->AppendSwitch("disable-component-update");
     command_line->AppendSwitch("disable-session-crashed-bubble");
     command_line->AppendSwitch("hide-crash-restore-bubble");
+
+    // Unpacked extensions the user explicitly loaded (M8). Comma-separated for
+    // Chromium; we store them ';'-separated. No update_url is ever contacted —
+    // extension update checks are user-initiated only (see CLAUDE.md).
+    if (!extension_dirs_.empty()) {
+      std::string csv = extension_dirs_;
+      for (char& c : csv) if (c == ';') c = ',';
+      command_line->AppendSwitchWithValue("load-extension", csv);
+    }
     // NOTE: process-wide GPU switches (--disable-gpu / --in-process-gpu /
     // --use-angle) break WinUI 3's own compositor since it shares this process.
     // The GPU-process instability seen when hosting via a raw child HWND is one

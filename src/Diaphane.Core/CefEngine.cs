@@ -11,7 +11,8 @@ public sealed record CefEngineOptions(
     string RootCacheDir,
     bool Windowless = false,
     bool NoSandbox = false,
-    string? UserAgent = null);
+    string? UserAgent = null,
+    IReadOnlyList<string>? ExtensionDirs = null);
 
 /// <summary>
 /// The real <see cref="IBrowserEngine"/> — a thin managed shell over DiaphaneCore.dll.
@@ -38,6 +39,7 @@ public sealed class CefEngine : IBrowserEngine, IDisposable
             UserAgent = o.UserAgent,
             Windowless = o.Windowless ? 1 : 0,
             NoSandbox = o.NoSandbox ? 1 : 0,
+            ExtensionDirs = o.ExtensionDirs is { Count: > 0 } dirs ? string.Join(';', dirs) : null,
         };
 
         if (dc_initialize(settings, _pumpCb, IntPtr.Zero) == 0)
@@ -82,10 +84,12 @@ public sealed class CefEngine : IBrowserEngine, IDisposable
 
 internal sealed class CefRequestContext(string id, bool persistent, bool owned) : IRequestContext
 {
+    private readonly List<ExtensionInfo> _extensions = new();
+
     public Guid Id { get; } = DeterministicGuid(id);
     internal string Id2 { get; } = id;
     public bool IsPersistent => persistent;
-    public IReadOnlyList<ExtensionInfo> Extensions => Array.Empty<ExtensionInfo>();
+    public IReadOnlyList<ExtensionInfo> Extensions => _extensions;
 
     public Task ClearCookiesAsync(DateTimeOffset? since = null)
     {
@@ -111,8 +115,19 @@ internal sealed class CefRequestContext(string id, bool persistent, bool owned) 
         return Task.CompletedTask;
     }
 
-    public Task<ExtensionInfo> LoadExtensionAsync(string path) =>
-        throw new NotImplementedException("Extension loading lands in a later milestone.");
+    /// <summary>
+    /// Parse an unpacked extension's manifest and record it. The engine actually
+    /// loads enabled extensions at process start via --load-extension, so a
+    /// freshly-added one takes effect on the next launch.
+    /// </summary>
+    public Task<ExtensionInfo> LoadExtensionAsync(string path)
+    {
+        var m = Diaphane.Shell.Extensions.ExtensionManifest.FromDirectory(path);
+        var info = new ExtensionInfo(m.Id, m.Name, m.Version, Enabled: true, m.Permissions);
+        _extensions.RemoveAll(e => e.Id == m.Id);
+        _extensions.Add(info);
+        return Task.FromResult(info);
+    }
 
     public void Dispose()
     {

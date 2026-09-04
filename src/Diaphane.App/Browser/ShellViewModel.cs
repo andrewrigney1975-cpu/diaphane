@@ -28,17 +28,19 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     [ObservableProperty] private bool _activeIsSandbox;
     [ObservableProperty] private bool _showBookmarksBar = true;
     [ObservableProperty] private bool _showPrivacyPanel;
+    [ObservableProperty] private bool _showExtensionsPanel;
 
     public ObservableCollection<TabModel> Tabs { get; } = new();
     public ObservableCollection<Bookmark> BookmarksBar { get; } = new();
 
     private readonly PrivacyService _privacyService;
     public PrivacyViewModel Privacy { get; }
+    public ExtensionsViewModel Extensions { get; }
 
     public bool CanGoBack => ActiveTab?.CanGoBack ?? false;
     public bool CanGoForward => ActiveTab?.CanGoForward ?? false;
 
-    public ShellViewModel(IBrowserEngine engine, string dataDir)
+    public ShellViewModel(IBrowserEngine engine, string dataDir, ExtensionStore extensions)
     {
         _engine = engine;
         Directory.CreateDirectory(dataDir);
@@ -49,6 +51,7 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
             new DataClearer(engine.StandardContext, _history),
             new PrivacySettingsStore(Path.Combine(dataDir, "privacy.json")));
         Privacy = new PrivacyViewModel(_privacyService);
+        Extensions = new ExtensionsViewModel(extensions);
     }
 
     /// <summary>Run the configured clear-on-exit wipe. Called from the window's Closed handler.</summary>
@@ -192,8 +195,14 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
         {
             case "privacy":
             case "settings":
+                ShowExtensionsPanel = false;
                 ShowPrivacyPanel = true;
                 AddressText = "diaphane://privacy";
+                return true;
+            case "extensions":
+                ShowPrivacyPanel = false;
+                ShowExtensionsPanel = true;
+                AddressText = "diaphane://extensions";
                 return true;
             case "newtab":
                 return false; // handled as a real (blank) navigation
@@ -202,11 +211,26 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
         }
     }
 
-    [RelayCommand] public void TogglePrivacyPanel() => ShowPrivacyPanel = !ShowPrivacyPanel;
+    [RelayCommand] public void TogglePrivacyPanel()
+    {
+        ShowExtensionsPanel = false;
+        ShowPrivacyPanel = !ShowPrivacyPanel;
+    }
     [RelayCommand] public void ClosePrivacyPanel()
     {
         ShowPrivacyPanel = false;
         if (AddressText == "diaphane://privacy") AddressText = Presentable(ActiveTab?.Url ?? "");
+    }
+
+    [RelayCommand] public void ToggleExtensionsPanel()
+    {
+        ShowPrivacyPanel = false;
+        ShowExtensionsPanel = !ShowExtensionsPanel;
+    }
+    [RelayCommand] public void CloseExtensionsPanel()
+    {
+        ShowExtensionsPanel = false;
+        if (AddressText == "diaphane://extensions") AddressText = Presentable(ActiveTab?.Url ?? "");
     }
 
     [RelayCommand(CanExecute = nameof(CanGoBack))] public void GoBack() => ActiveTab?.Back();

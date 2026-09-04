@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.WindowsRuntime;
 using Diaphane.App.Browser;
+using Diaphane.Data;
 using Diaphane.Shell.Engine;
 using Diaphane.Shell.Tabs;
 using Microsoft.UI.Xaml;
@@ -19,6 +20,7 @@ namespace Diaphane.App;
 public sealed partial class MainWindow : Window
 {
     private readonly CefHost _cef;
+    private readonly ExtensionStore _extensions;
     public ShellViewModel Vm { get; }
 
     private IOffscreenBrowserView? _view;
@@ -39,9 +41,11 @@ public sealed partial class MainWindow : Window
 
         var dataDir = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Diaphane");
+        Directory.CreateDirectory(dataDir);
 
-        _cef = new CefHost(DispatcherQueue, CefHost.ResolveNativeBinDir());
-        Vm = new ShellViewModel(_cef.Engine, dataDir);
+        _extensions = new ExtensionStore(Path.Combine(dataDir, "extensions.db"));
+        _cef = new CefHost(DispatcherQueue, CefHost.ResolveNativeBinDir(), _extensions.EnabledPaths());
+        Vm = new ShellViewModel(_cef.Engine, dataDir, _extensions);
         Vm.PropertyChanged += OnVmPropertyChanged;
         Vm.Tabs.CollectionChanged += (_, _) => SyncTabStrip();
 
@@ -68,6 +72,7 @@ public sealed partial class MainWindow : Window
             try { Vm.RunClearOnExitAsync().Wait(TimeSpan.FromSeconds(5)); } catch { /* best effort */ }
             Vm.Dispose();
             _cef.Dispose();
+            _extensions.Dispose();
         };
 
         InstallAccelerators();
@@ -113,6 +118,26 @@ public sealed partial class MainWindow : Window
         Add(VirtualKey.B, CtrlShift, () => Vm.ToggleBookmarksBarCommand.Execute(null));
         Add(VirtualKey.N, CtrlShift, () => Vm.NewSandboxTabCommand.Execute(null));
         Add(VirtualKey.Delete, CtrlShift, () => Vm.TogglePrivacyPanelCommand.Execute(null));
+        Add(VirtualKey.E, CtrlShift, () => Vm.ToggleExtensionsPanelCommand.Execute(null));
+    }
+
+    // ---- diaphane://extensions ----
+    private async void OnLoadUnpackedClick(object sender, RoutedEventArgs e)
+    {
+        var picker = new Windows.Storage.Pickers.FolderPicker { SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.Desktop };
+        picker.FileTypeFilter.Add("*");
+        WinRT.Interop.InitializeWithWindow.Initialize(picker,
+            WinRT.Interop.WindowNative.GetWindowHandle(this));
+
+        var folder = await picker.PickSingleFolderAsync();
+        if (folder is not null)
+            Vm.Extensions.LoadUnpacked(folder.Path);
+    }
+
+    private void OnRemoveExtensionClick(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is Browser.ExtensionRow row)
+            Vm.Extensions.RemoveCommand.Execute(row);
     }
 
     // Diagnostic: RenderTargetBitmap captures the live XAML visual tree (incl. the
