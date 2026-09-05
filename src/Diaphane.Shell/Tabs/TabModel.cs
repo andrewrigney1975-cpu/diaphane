@@ -149,14 +149,13 @@ public sealed class TabManager : IDisposable
     public ObservableCollection<TabModel> Tabs { get; } = new();
     public TabModel? Active { get; private set; }
 
-    private (int X, int Y, int W, int H)? _lastBounds;
+    private readonly HashSet<TabModel> _visible = new();
 
-    /// <summary>Remember the content-area rect so a freshly activated tab is sized to match.</summary>
-    public void SetActiveBounds(int x, int y, int w, int h)
-    {
-        _lastBounds = (x, y, w, h);
-        Active?.SetBounds(x, y, w, h);
-    }
+    /// <summary>Every tab currently painting. With no splits this is just <see cref="Active"/>;
+    /// once Multiview panes exist, several tabs can be visible at once (one per pane) — see
+    /// <see cref="SetVisible"/>.</summary>
+    public IReadOnlyCollection<TabModel> VisibleTabs => _visible;
+    public bool IsVisible(TabModel tab) => _visible.Contains(tab);
 
     public TabModel NewStandardTab(string? url = null)
     {
@@ -190,6 +189,7 @@ public sealed class TabManager : IDisposable
     public void Close(TabModel tab)
     {
         Tabs.Remove(tab);
+        _visible.Remove(tab);
         tab.Dispose();
         tab.View.Dispose();
 
@@ -218,11 +218,19 @@ public sealed class TabManager : IDisposable
 
     public void Activate(TabModel? tab)
     {
-        foreach (var t in Tabs) t.View.SetVisible(ReferenceEquals(t, tab));
         Active = tab;
-        if (tab is not null && _lastBounds is { } b)
-            tab.SetBounds(b.X, b.Y, b.W, b.H);
+        SetVisible(tab is null ? Array.Empty<TabModel>() : new[] { tab });
         tab?.View.SetFocus(true);
+    }
+
+    /// <summary>Marks exactly this set of tabs as visible (painting), hiding every other tab.
+    /// Multiview will call this with everything currently shown across every pane; the classic,
+    /// never-split case is just <see cref="Activate"/> calling it with a single tab.</summary>
+    public void SetVisible(IReadOnlyCollection<TabModel> tabs)
+    {
+        _visible.Clear();
+        foreach (var t in tabs) _visible.Add(t);
+        foreach (var t in Tabs) t.View.SetVisible(_visible.Contains(t));
     }
 
     private void AddAndActivate(TabModel tab)
