@@ -12,6 +12,7 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Ellipse = Microsoft.UI.Xaml.Shapes.Ellipse;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
 using Windows.System;
@@ -42,7 +43,7 @@ public sealed partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
-        Title = "diaphane";
+        Title = "Diaphane";
 
         var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "diaphane.ico");
         if (File.Exists(iconPath))
@@ -68,7 +69,7 @@ public sealed partial class MainWindow : Window
         ((Windows.Foundation.Collections.IObservableVector<object>)TabStrip.TabItems).VectorChanged += OnTabItemsReordered;
         Vm.SettingsChanged += ApplyTheme;
         Vm.SettingsChanged += () => _cef.Engine.SetDefaultDownloadDirectory(Vm.Settings.DownloadDirectory);
-        Vm.Settings.EngineVersion = $"diaphane {Vm.Settings.Version}  ·  {_cef.Engine.Version}";
+        Vm.Settings.EngineVersion = $"Diaphane {Vm.Settings.Version}  ·  {_cef.Engine.Version}";
         ApplyTheme();
         RestoreWindowGeometry();
         _cef.Engine.SetDefaultDownloadDirectory(Vm.Settings.DownloadDirectory);
@@ -83,6 +84,7 @@ public sealed partial class MainWindow : Window
             foreach (var s in _pinnedSurfaces) s.Detach();
             _pinnedSurfaces.Clear();
         };
+        Vm.Panes.Changed += RefreshPinnedIndicators;
         // Triggers an immediate synchronous build of the (today, always single) FollowActiveTab
         // leaf, which is what actually creates _page/BrowserImage/BrowserFocus/LoadBar the first
         // time — see BuildBrowserRegion.
@@ -252,6 +254,10 @@ public sealed partial class MainWindow : Window
         Add(VirtualKey.I, CtrlShift, () => Vm.ToggleDevToolsCommand.Execute(null));
         Add(VirtualKey.F12, VirtualKeyModifiers.None, () => Vm.ToggleDevToolsCommand.Execute(null));
         Add(VirtualKey.J, Ctrl, () => Vm.ToggleDownloadsPanelCommand.Execute(null));
+        // Multiview: mirrors the two rail buttons — Right/Down read naturally as which way the
+        // split opens, and neither combination collides with anything above.
+        Add(VirtualKey.Right, CtrlShift, () => Vm.SplitPaneRightCommand.Execute(null));
+        Add(VirtualKey.Down, CtrlShift, () => Vm.SplitPaneDownCommand.Execute(null));
     }
 
     // ---- diaphane://extensions ----
@@ -683,10 +689,59 @@ public sealed partial class MainWindow : Window
         if (name is not null) Vm.CreateGroup(parentId, name);
     }
 
+    // Only ever called for a group (see BookmarksTree_RightTapped) — a plain bookmark's rename
+    // goes through PromptEditBookmarkAsync (title + URL) instead, since only a group carries a
+    // colour chip.
     private async Task PromptRenameAsync(Bookmark b)
     {
-        var name = await PromptTextAsync("Rename", "Name", b.Title, "Rename");
-        if (name is not null && name != b.Title) Vm.RenameBookmark(b, name);
+        var nameBox = new TextBox { Header = "Name", Text = b.Title, Width = 300 };
+
+        var selected = b.Color ?? BookmarkStore.RandomGroupColor();
+        var rings = new Dictionary<string, Border>();
+        var swatches = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 4, 0, 0) };
+        foreach (var hex in BookmarkStore.GroupColorPalette)
+        {
+            var ring = new Border
+            {
+                Width = 28,
+                Height = 28,
+                CornerRadius = new CornerRadius(14),
+                BorderThickness = new Thickness(hex == selected ? 2 : 0),
+                BorderBrush = (Brush)Application.Current.Resources["AccentFillColorDefaultBrush"],
+                Child = new Ellipse { Width = 20, Height = 20, Fill = new SolidColorBrush(HexColor.Parse(hex)) },
+            };
+            ring.Tapped += (_, _) =>
+            {
+                selected = hex;
+                foreach (var (k, border) in rings) border.BorderThickness = new Thickness(k == selected ? 2 : 0);
+            };
+            rings[hex] = ring;
+            swatches.Children.Add(ring);
+        }
+
+        var dialog = new ContentDialog
+        {
+            XamlRoot = Content.XamlRoot,
+            Title = "Rename group",
+            Content = new StackPanel
+            {
+                Spacing = 4,
+                Children =
+                {
+                    nameBox,
+                    new TextBlock { Text = "Colour", Margin = new Thickness(0, 8, 0, 0) },
+                    swatches,
+                },
+            },
+            PrimaryButtonText = "Save",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        var name = nameBox.Text.Trim();
+        if (name.Length == 0) return;
+        Vm.RenameBookmark(b, name, selected);
     }
 
     private async Task<string?> PromptTextAsync(string title, string header, string prefill, string primary)
@@ -832,6 +887,15 @@ public sealed partial class MainWindow : Window
         LeafMode.Pinned => BuildPinnedPaneContent(node.PinnedTab!),
         _ => throw new ArgumentOutOfRangeException(nameof(node)),
     };
+
+    private bool IsTabPinned(TabModel t) => Vm.Panes.Leaves().Any(l => l.Mode == LeafMode.Pinned && ReferenceEquals(l.PinnedTab, t));
+
+    private void RefreshPinnedIndicators()
+    {
+        foreach (var (tab, item) in _tabItems)
+            if (item.Header is StackPanel { Children: [_, _, _, FontIcon pinIcon, _] })
+                pinIcon.Visibility = IsTabPinned(tab) ? Visibility.Visible : Visibility.Collapsed;
+    }
 
     private FrameworkElement BuildPinnedPaneContent(TabModel tab)
     {
@@ -1039,9 +1103,38 @@ public sealed partial class MainWindow : Window
             Visibility = t.AutoReloadSeconds is not null ? Visibility.Visible : Visibility.Collapsed,
             Margin = new Thickness(0, 0, 6, 0),
         };
+        // The colour chip of the bookmark group this tab was opened from, if any — matches the
+        // same group's chip in the bookmarks list.
+        var groupChip = new Ellipse
+        {
+            Width = 8,
+            Height = 8,
+            Margin = new Thickness(0, 0, 6, 0),
+            Fill = t.GroupColor is { } hex ? new SolidColorBrush(HexColor.Parse(hex)) : null,
+            Visibility = t.GroupColor is not null ? Visibility.Visible : Visibility.Collapsed,
+        };
+        // Multiview: shown while this tab is pinned to a pane, so a glance at the strip says
+        // which tabs are "in use" by a split rather than idle in the background. Earlier attempts
+        // at this appeared invisible not because of the glyph, but because it sat *after* the
+        // (up to 200px) title text \u2014 on a long title or narrow tab that put it past whatever
+        // TabViewItem clips its header to. Fixed decorations belong before the text, same as the
+        // sandbox icon/auto-reload icon/group chip.
+        var pinIcon = new FontIcon
+        {
+            Glyph = "\uE718",
+            FontSize = 12,
+            Foreground = (Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"],
+            Margin = new Thickness(0, 0, 6, 0),
+            Visibility = IsTabPinned(t) ? Visibility.Visible : Visibility.Collapsed,
+        };
+        ToolTipService.SetToolTip(pinIcon, "Pinned to a Multiview pane");
         var panel = new StackPanel { Orientation = Orientation.Horizontal };
+        // All fixed-size decorations go before the (flexible, ellipsizing) title text — the text
+        // is what should shrink to fit a narrow tab or long title, never these.
         panel.Children.Add(icon);
+        panel.Children.Add(groupChip);
         panel.Children.Add(autoReloadIcon);
+        panel.Children.Add(pinIcon);
         panel.Children.Add(text);
         var item = new TabViewItem { Header = panel, Tag = t, CanDrag = true };
         item.PointerPressed += OnTabItemPointerPressed;
@@ -1114,7 +1207,7 @@ public sealed partial class MainWindow : Window
     {
         if (sender is not TabModel t) return;
         if (!_tabItems.TryGetValue(t, out var item) ||
-            item.Header is not StackPanel { Children: [_, FontIcon autoReloadIcon, TextBlock tb] }) return;
+            item.Header is not StackPanel { Children: [_, Ellipse groupChip, FontIcon autoReloadIcon, FontIcon _, TextBlock tb] }) return;
 
         switch (e.PropertyName)
         {
@@ -1125,6 +1218,10 @@ public sealed partial class MainWindow : Window
                 autoReloadIcon.Visibility = t.AutoReloadSeconds is not null ? Visibility.Visible : Visibility.Collapsed;
                 ToolTipService.SetToolTip(autoReloadIcon,
                     t.AutoReloadSeconds is { } s ? $"Auto-reloading every {s}s" : null);
+                break;
+            case nameof(TabModel.GroupColor):
+                groupChip.Fill = t.GroupColor is { } hex ? new SolidColorBrush(HexColor.Parse(hex)) : null;
+                groupChip.Visibility = t.GroupColor is not null ? Visibility.Visible : Visibility.Collapsed;
                 break;
         }
     }

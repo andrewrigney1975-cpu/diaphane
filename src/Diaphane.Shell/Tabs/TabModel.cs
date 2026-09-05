@@ -65,6 +65,13 @@ public sealed class TabModel : INotifyPropertyChanged, IDisposable
     public bool CanGoBack => _view.CanGoBack;
     public bool CanGoForward => _view.CanGoForward;
 
+    /// <summary>The "#RRGGBB" colour of the bookmark group this tab was opened from, if any — set
+    /// by the shell layer (which owns bookmarks), shown as a small chip on this tab's strip item
+    /// alongside the same group's colour chip in the bookmarks list. Opaque to TabModel itself:
+    /// just a colour to display, not a reference to any bookmark/group object.</summary>
+    public string? GroupColor { get => _groupColor; set => Set(ref _groupColor, value); }
+    private string? _groupColor;
+
     public override string ToString() => string.IsNullOrEmpty(Title) ? "New Tab" : Title;
 
     public void Navigate(string url) => _view.Navigate(url);

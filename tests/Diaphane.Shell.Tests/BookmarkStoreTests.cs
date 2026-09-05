@@ -149,6 +149,100 @@ public class BookmarkStoreTests
         }
     }
 
+    [Fact]
+    public void Add_Folder_GetsARandomColorFromThePalette()
+    {
+        var path = NewDbPath();
+        using var store = new BookmarkStore(path);
+        try
+        {
+            var groupId = store.Add("Work", null, isFolder: true);
+
+            var color = store.Get(groupId)!.Color;
+
+            Assert.NotNull(color);
+            Assert.Contains(color, BookmarkStore.GroupColorPalette);
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { }
+        }
+    }
+
+    [Fact]
+    public void Add_PlainBookmark_HasNoColor()
+    {
+        var path = NewDbPath();
+        using var store = new BookmarkStore(path);
+        try
+        {
+            var id = store.Add("Example", "https://example.com");
+
+            Assert.Null(store.Get(id)!.Color);
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { }
+        }
+    }
+
+    [Fact]
+    public void Add_Folder_ExplicitColor_IsUsedInsteadOfRandom()
+    {
+        var path = NewDbPath();
+        using var store = new BookmarkStore(path);
+        try
+        {
+            var groupId = store.Add("Work", null, isFolder: true, color: "#123456");
+
+            Assert.Equal("#123456", store.Get(groupId)!.Color);
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { }
+        }
+    }
+
+    [Fact]
+    public void Update_WithColor_ChangesIt()
+    {
+        var path = NewDbPath();
+        using var store = new BookmarkStore(path);
+        try
+        {
+            var groupId = store.Add("Work", null, isFolder: true, color: "#111111");
+
+            store.Update(groupId, "Renamed", null, "#ABCDEF");
+
+            var got = store.Get(groupId)!;
+            Assert.Equal("Renamed", got.Title);
+            Assert.Equal("#ABCDEF", got.Color);
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { }
+        }
+    }
+
+    [Fact]
+    public void Update_WithoutColor_LeavesItUnchanged()
+    {
+        var path = NewDbPath();
+        using var store = new BookmarkStore(path);
+        try
+        {
+            var groupId = store.Add("Work", null, isFolder: true, color: "#111111");
+
+            store.Update(groupId, "Renamed", null);
+
+            Assert.Equal("#111111", store.Get(groupId)!.Color);
+        }
+        finally
+        {
+            try { File.Delete(path); } catch { }
+        }
+    }
+
     private static string NewDbPath() =>
         Path.Combine(Path.GetTempPath(), $"diaphane-bookmark-test-{Guid.NewGuid():N}.db");
 }

@@ -38,7 +38,7 @@
 
             <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" Margin="14,0,0,0" VerticalAlignment="Center">
                 <Image Source="ms-appx:///Assets/diaphane-256.png" Width="18" Height="18" VerticalAlignment="Center" />
-                <TextBlock Text="diaphane" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
+                <TextBlock Text="Diaphane" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
             </StackPanel>
 
             <ToggleButton Grid.Column="1" x:Name="RightPaneToggleButton" Click="RightPaneToggleButton_Click"
@@ -126,22 +126,17 @@
                     <Rectangle Height="1" Margin="8,3" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
 
                     <!-- Multiview: splits the content area around whatever pane the live browser
-                         is currently in. Drag-to-pin (filling the blank pane it opens up) lands
-                         in a later milestone; for now these produce real, resizable, removable
-                         (Ctrl+click the splitter) splits with an empty drop-target on one side. -->
+                         is currently in. Drag a tab onto the blank side to pin it there; Ctrl+click
+                         the splitter to remove that split and return its tab(s) to normal. -->
                     <Button Style="{StaticResource ActivityBarButtonStyle}"
                             Command="{x:Bind Vm.SplitPaneRightCommand}"
-                            AutomationProperties.Name="Split pane right" ToolTipService.ToolTip="Split pane right">
-                        <FontIcon Glyph="&#xE8A9;" FontSize="16" />
+                            AutomationProperties.Name="Split pane right" ToolTipService.ToolTip="Split pane right (Ctrl+Shift+Right)">
+                        <FontIcon Glyph="&#xE90D;" FontSize="16" />
                     </Button>
                     <Button Style="{StaticResource ActivityBarButtonStyle}"
                             Command="{x:Bind Vm.SplitPaneDownCommand}"
-                            AutomationProperties.Name="Split pane down" ToolTipService.ToolTip="Split pane down">
-                        <FontIcon Glyph="&#xE8A9;" FontSize="16" RenderTransformOrigin="0.5,0.5">
-                            <FontIcon.RenderTransform>
-                                <RotateTransform Angle="90" />
-                            </FontIcon.RenderTransform>
-                        </FontIcon>
+                            AutomationProperties.Name="Split pane down" ToolTipService.ToolTip="Split pane down (Ctrl+Shift+Down)">
+                        <FontIcon Glyph="&#xE90E;" FontSize="16" />
                     </Button>
                     <Rectangle Height="1" Margin="8,3" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
 
@@ -206,11 +201,17 @@
                                   DragOver="BookmarkRow_DragOver" Drop="BookmarkRow_Drop">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
                                 <FontIcon Grid.Column="0" Glyph="{Binding Glyph}" FontSize="14"
                                           Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
-                                <TextBlock Grid.Column="1" Text="{Binding DisplayName}" VerticalAlignment="Center"
+                                <!-- Group colour chip — visually ties this group's bookmarks and any
+                                     tab opened from it back to the same group (see the tab strip). -->
+                                <Ellipse Grid.Column="1" Width="10" Height="10" VerticalAlignment="Center"
+                                         Fill="{Binding ColorBrush}"
+                                         Visibility="{Binding IsFolder, Converter={StaticResource BoolVis}}" />
+                                <TextBlock Grid.Column="2" Text="{Binding DisplayName}" VerticalAlignment="Center"
                                            TextTrimming="CharacterEllipsis" />
                             </Grid>
                         </TreeViewItem>
@@ -368,7 +369,7 @@
               Visibility="{x:Bind local:MainWindow.VisIf(Vm.ShowPrivacyPanel), Mode=OneWay}">
             <Border MaxWidth="460" Margin="24" Padding="24" VerticalAlignment="Top"
                     HorizontalAlignment="Center"
-                    Background="{ThemeResource LayerFillColorDefaultBrush}"
+                    Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
                     CornerRadius="8">
                 <StackPanel Spacing="12">
@@ -422,7 +423,7 @@
               Visibility="{x:Bind local:MainWindow.VisIf(Vm.ShowExtensionsPanel), Mode=OneWay}">
             <Border MaxWidth="560" MaxHeight="620" Margin="24" Padding="24" VerticalAlignment="Top"
                     HorizontalAlignment="Center"
-                    Background="{ThemeResource LayerFillColorDefaultBrush}"
+                    Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
                     CornerRadius="8">
                 <Grid RowSpacing="12">
@@ -494,7 +495,7 @@
               Visibility="{x:Bind local:MainWindow.VisIf(Vm.ShowSettingsPanel), Mode=OneWay}">
             <Border MaxWidth="520" MaxHeight="680" Margin="24" Padding="24" VerticalAlignment="Top"
                     HorizontalAlignment="Center"
-                    Background="{ThemeResource LayerFillColorDefaultBrush}"
+                    Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1"
                     CornerRadius="8">
                 <Grid RowSpacing="14">

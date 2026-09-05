@@ -459,14 +459,24 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     [RelayCommand]
     public void OpenBookmark(Bookmark? b)
     {
-        if (b?.Url is { Length: > 0 } url) { ActiveTab?.Navigate(url); AddressText = url; }
+        if (b?.Url is not { Length: > 0 } url) return;
+        ActiveTab?.Navigate(url);
+        AddressText = url;
+        if (ActiveTab is not null) ActiveTab.GroupColor = ResolveGroupColor(b);
     }
 
     [RelayCommand]
     public void OpenBookmarkInNewTab(Bookmark? b)
     {
-        if (b?.Url is { Length: > 0 } url) ActiveTab = _tabs!.NewStandardTab(url);
+        if (b?.Url is not { Length: > 0 } url) return;
+        var tab = _tabs!.NewStandardTab(url);
+        tab.GroupColor = ResolveGroupColor(b);
+        ActiveTab = tab;
     }
+
+    /// <summary>The colour chip a tab opened from this bookmark should carry — its immediate
+    /// parent group's colour, or null if it isn't in a group.</summary>
+    private string? ResolveGroupColor(Bookmark b) => b.ParentId is { } parentId ? _bookmarks.Get(parentId)?.Color : null;
 
     [RelayCommand]
     public void RemoveBookmark(Bookmark? b)
@@ -484,10 +494,11 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
         RefreshBookmarkTree();
     }
 
-    /// <summary>Rename a group or a bookmark (title only — a bookmark's URL is untouched).</summary>
-    public void RenameBookmark(Bookmark b, string title)
+    /// <summary>Rename a group or a bookmark (title only — a bookmark's URL is untouched). For a
+    /// group, optionally change its colour chip in the same call.</summary>
+    public void RenameBookmark(Bookmark b, string title, string? color = null)
     {
-        _bookmarks.Update(b.Id, title, b.Url);
+        _bookmarks.Update(b.Id, title, b.Url, color);
         RefreshBookmarkTree();
     }
 
@@ -506,16 +517,18 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     {
         foreach (var url in CollectUrls(group))
         {
+            TabModel t;
             if (sandbox)
             {
-                var t = _tabs!.NewSandboxTab(group: _sandboxGroup, url: url);
+                t = _tabs!.NewSandboxTab(group: _sandboxGroup, url: url);
                 _sandboxGroup ??= t.ContextId;
-                ActiveTab = t;
             }
             else
             {
-                ActiveTab = _tabs!.NewStandardTab(url);
+                t = _tabs!.NewStandardTab(url);
             }
+            t.GroupColor = group.Model.Color;
+            ActiveTab = t;
         }
     }
 
