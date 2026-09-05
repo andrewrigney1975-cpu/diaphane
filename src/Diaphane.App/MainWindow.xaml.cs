@@ -4,6 +4,7 @@ using System.Runtime.InteropServices.WindowsRuntime;
 using Diaphane.App.Browser;
 using Diaphane.Data;
 using Diaphane.Shell.Engine;
+using Diaphane.Shell.Multiview;
 using Diaphane.Shell.Tabs;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -27,6 +28,15 @@ public sealed partial class MainWindow : Window
 
     private CefSurface _page = null!;
     private CefSurface _dev = null!;
+    private PaneTreeView _panes = null!;
+
+    // Built once by BuildBrowserRegion — the classic (never-split) browsing surface. No longer
+    // XAML-declared (PaneHost is empty in the markup) so PaneTreeView is free to parent it
+    // wherever the pane tree's one reachable leaf (FollowActiveTab) currently lives.
+    private Grid _browserRegion = null!;
+    private ScrollViewer BrowserFocus = null!;
+    private Image BrowserImage = null!;
+    private ProgressBar LoadBar = null!;
 
     public MainWindow()
     {
@@ -62,9 +72,11 @@ public sealed partial class MainWindow : Window
         RestoreWindowGeometry();
         _cef.Engine.SetDefaultDownloadDirectory(Vm.Settings.DownloadDirectory);
 
+        _browserRegion = BuildBrowserRegion();
         _page = new CefSurface(BrowserImage, BrowserFocus);
         _dev = new CefSurface(DevToolsImage, DevToolsFocus);
         Address.GotFocus += (_, _) => { _page.Blur(); _dev.Blur(); };
+        _panes = new PaneTreeView(PaneHost, Vm.Panes, BuildLeafContent);
 
         Root.Loaded += (_, _) =>
         {
@@ -774,6 +786,84 @@ public sealed partial class MainWindow : Window
     {
         _draggingBookmarksSplitter = false;
         BookmarksSplitter.ReleasePointerCapture(e.Pointer);
+    }
+
+    // ---- Multiview: pane tree rendering ----
+    // Only LeafMode.FollowActiveTab is reachable today — there's no way yet to create a split
+    // or pin a tab (Milestones 4-5), so Vm.Panes is always exactly one such leaf and this is
+    // BuildBrowserRegion's element, unchanged. Empty gets a plain drop-target placeholder now;
+    // Pinned will get its own CefSurface (mirroring BuildBrowserRegion) once drag-to-pin exists.
+    private FrameworkElement BuildLeafContent(PaneNode node) => node.Mode switch
+    {
+        LeafMode.FollowActiveTab => _browserRegion,
+        LeafMode.Empty => BuildEmptyPaneContent(),
+        _ => throw new NotSupportedException("Pinned-pane rendering lands with drag-to-pin (Milestone 5)."),
+    };
+
+    private static FrameworkElement BuildEmptyPaneContent() => new Border
+    {
+        Background = (Brush)Application.Current.Resources["LayerFillColorDefaultBrush"],
+        BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+        BorderThickness = new Thickness(1),
+        Child = new TextBlock
+        {
+            Text = "Drag a tab here",
+            Opacity = 0.5,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        },
+    };
+
+    /// <summary>The classic browsing surface — was declared directly in XAML under
+    /// BrowserRegion; now built once here so PaneTreeView can parent it at whatever position
+    /// the pane tree's FollowActiveTab leaf occupies.</summary>
+    private Grid BuildBrowserRegion()
+    {
+        var image = new Image
+        {
+            Stretch = Stretch.None,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+            ManipulationMode = ManipulationModes.None,
+        };
+        image.PointerMoved += OnPointerMoved;
+        image.PointerPressed += OnPointerPressed;
+        image.PointerReleased += OnPointerReleased;
+        image.PointerExited += OnPointerExited;
+        image.PointerWheelChanged += OnPointerWheel;
+
+        var focus = new ScrollViewer
+        {
+            IsTabStop = true,
+            UseSystemFocusVisuals = false,
+            HorizontalScrollMode = ScrollMode.Disabled,
+            VerticalScrollMode = ScrollMode.Disabled,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Hidden,
+            Background = (Brush)Application.Current.Resources["SolidBackgroundFillColorBaseBrush"],
+            Content = image,
+        };
+        focus.LostFocus += OnPageLostFocus;
+        focus.KeyDown += OnKeyDown;
+        focus.KeyUp += OnKeyUp;
+        focus.CharacterReceived += OnChar;
+
+        var loadBar = new ProgressBar
+        {
+            VerticalAlignment = VerticalAlignment.Top,
+            IsIndeterminate = true,
+            Visibility = Visibility.Collapsed,
+        };
+
+        var region = new Grid();
+        region.Children.Add(focus);
+        region.Children.Add(loadBar);
+        region.SizeChanged += OnBrowserRegionChanged;
+
+        BrowserImage = image;
+        BrowserFocus = focus;
+        LoadBar = loadBar;
+        return region;
     }
 
     // ---- page surface (delegates to CefSurface) ----

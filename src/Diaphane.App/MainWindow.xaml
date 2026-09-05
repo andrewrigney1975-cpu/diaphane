@@ -264,23 +264,10 @@
                 <ColumnDefinition x:Name="DevToolsColumn" Width="0" />
             </Grid.ColumnDefinitions>
 
-            <Grid x:Name="BrowserRegion" Grid.Column="0" SizeChanged="OnBrowserRegionChanged">
-                <ScrollViewer x:Name="BrowserFocus" IsTabStop="True" UseSystemFocusVisuals="False"
-                              HorizontalScrollMode="Disabled" VerticalScrollMode="Disabled"
-                              HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden"
-                              Background="{ThemeResource SolidBackgroundFillColorBaseBrush}"
-                              LostFocus="OnPageLostFocus"
-                              KeyDown="OnKeyDown" KeyUp="OnKeyUp" CharacterReceived="OnChar">
-                    <Image x:Name="BrowserImage" Stretch="None"
-                           HorizontalAlignment="Left" VerticalAlignment="Top"
-                           ManipulationMode="None"
-                           PointerMoved="OnPointerMoved" PointerPressed="OnPointerPressed"
-                           PointerReleased="OnPointerReleased" PointerExited="OnPointerExited"
-                           PointerWheelChanged="OnPointerWheel" />
-                </ScrollViewer>
-                <ProgressBar x:Name="LoadBar" VerticalAlignment="Top" IsIndeterminate="True"
-                             Visibility="Collapsed" />
-            </Grid>
+            <!-- Multiview: PaneTreeView (built in code-behind) renders whatever Vm.Panes describes
+                 into this host. With no splits — today's only reachable state — that's exactly the
+                 same browser surface this Grid used to declare directly; see BuildBrowserRegion. -->
+            <Grid x:Name="PaneHost" Grid.Column="0" />
 
             <local:SplitterHandle x:Name="DevToolsSplitter" Grid.Column="1" Width="6"
                     Background="{ThemeResource DividerStrokeColorDefaultBrush}"

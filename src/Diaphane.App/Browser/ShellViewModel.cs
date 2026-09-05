@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 using Diaphane.Data;
 using Diaphane.Privacy;
 using Diaphane.Shell.Engine;
+using Diaphane.Shell.Multiview;
 using Diaphane.Shell.Omnibox;
 using Diaphane.Shell.Settings;
 using Diaphane.Shell.Tabs;
@@ -44,6 +45,11 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     public AppTheme Theme => _settings.Theme;
 
     public ObservableCollection<TabModel> Tabs { get; } = new();
+
+    /// <summary>The content area's split layout — see Diaphane.Shell.Multiview.PaneTree. Never
+    /// persisted; every window starts with a single FollowActiveTab leaf (today's only reachable
+    /// state until split/pin UI lands in later milestones).</summary>
+    public PaneTree Panes { get; } = new();
 
     /// <summary>Root-level bookmarks and groups, for the left bookmarks panel's TreeView.</summary>
     public ObservableCollection<BookmarkNode> BookmarkTree { get; } = new();
