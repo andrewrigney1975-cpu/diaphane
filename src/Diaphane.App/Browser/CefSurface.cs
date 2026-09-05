@@ -39,6 +39,13 @@ internal sealed class CefSurface(Image image, Control host)
         _view.Invalidate();
     }
 
+    /// <summary>Asks CEF to repaint at the current size unconditionally — unlike <see cref="Resize"/>,
+    /// which only does anything when the computed pixel size has actually changed. A sibling panel
+    /// (bookmarks, the right pane) toggling can leave this pane's own size unchanged while still
+    /// needing a fresh paint, if the layout pass that would have changed it hasn't settled by the
+    /// time something reads ActualWidth/Height.</summary>
+    public void Invalidate() => _view?.Invalidate();
+
     public void Resize()
     {
         if (_view is null || host.ActualWidth < 1 || host.ActualHeight < 1) return;
@@ -53,6 +60,10 @@ internal sealed class CefSurface(Image image, Control host)
         image.Width = w / _scale;
         image.Height = h / _scale;
         _view.ResizeSurface(w, h);
+        // ResizeSurface alone doesn't reliably repaint at the new size in every case (a splitter
+        // drag, a window resize, or a sibling panel toggling can all change this without any
+        // mouse/keyboard input of their own to otherwise trigger one) — ask explicitly.
+        _view.Invalidate();
     }
 
     private void OnFramePainted(object? sender, FramePaint f)

@@ -149,9 +149,26 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
             Tabs.Clear();
             foreach (var t in _tabs!.Tabs) Tabs.Add(t);
         };
+        Panes.Changed += RecomputeVisibleTabs;
         RefreshBookmarkTree();
         RefreshDownloads();
         OpenStartupTabs();
+    }
+
+    /// <summary>Every tab a Multiview pane currently shows must stay visible (painting) even when
+    /// it isn't the tab-strip's own selection — a pinned pane doesn't care what's "active" — while
+    /// the one FollowActiveTab leaf always mirrors ActiveTab. Recomputed on every pane-tree change
+    /// and every ActiveTab change, since either can change which set that is.</summary>
+    private void RecomputeVisibleTabs()
+    {
+        if (_tabs is null) return;
+        var visible = new HashSet<TabModel>();
+        foreach (var leaf in Panes.Leaves())
+        {
+            if (leaf.Mode == LeafMode.Pinned && leaf.PinnedTab is { } pinned) visible.Add(pinned);
+            else if (leaf.Mode == LeafMode.FollowActiveTab && ActiveTab is { } active) visible.Add(active);
+        }
+        _tabs.SetVisible(visible);
     }
 
     private void OpenStartupTabs()
@@ -178,11 +195,12 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
         if (newValue is not null)
         {
             newValue.PropertyChanged += OnTabPropertyChanged;
-            _tabs?.Activate(newValue);
+            _tabs?.SetActive(newValue);
             AddressText = Presentable(newValue.Url);
             IsLoading = newValue.IsLoading;
             ActiveIsSandbox = newValue.IsSandbox;
         }
+        RecomputeVisibleTabs();
         OnPropertyChanged(nameof(ActiveIsBookmarked));
         NotifyNav();
     }
@@ -254,6 +272,7 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     public void CloseTab(TabModel tab)
     {
         _lastRecorded.Remove(tab);
+        Panes.TabClosed(tab); // any pane pinned to it reverts to Empty, not left dangling
         _tabs?.Close(tab);
         if (_tabs is not null && _tabs.Tabs.All(x => !x.IsSandbox)) _sandboxGroup = null;
         ActiveTab = _tabs?.Active;

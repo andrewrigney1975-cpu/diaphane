@@ -75,6 +75,14 @@ public sealed partial class MainWindow : Window
 
         _dev = new CefSurface(DevToolsImage, DevToolsFocus);
         Address.GotFocus += (_, _) => { _page?.Blur(); _dev.Blur(); };
+        // Every pinned pane's surface is rebuilt from scratch too (see BuildPinnedPaneContent) —
+        // detach whatever the previous rebuild created before the new set gets built, or each one
+        // keeps receiving paint callbacks for content nothing shows anymore.
+        Vm.Panes.Changed += () =>
+        {
+            foreach (var s in _pinnedSurfaces) s.Detach();
+            _pinnedSurfaces.Clear();
+        };
         // Triggers an immediate synchronous build of the (today, always single) FollowActiveTab
         // leaf, which is what actually creates _page/BrowserImage/BrowserFocus/LoadBar the first
         // time — see BuildBrowserRegion.
@@ -518,6 +526,7 @@ public sealed partial class MainWindow : Window
             RightPaneToggleButton.IsChecked = false;
             if (!anySelected) _rightPaneCollapsed = false; // fully closed also resets the collapse flag
         }
+        DispatcherQueue.TryEnqueue(RefreshAllPaneSurfaces);
     }
 
     private void RightPaneToggleButton_Click(object sender, RoutedEventArgs e)
@@ -556,6 +565,19 @@ public sealed partial class MainWindow : Window
         {
             BookmarksColumn.Width = new GridLength(0);
         }
+        DispatcherQueue.TryEnqueue(RefreshAllPaneSurfaces);
+    }
+
+    /// <summary>Every Multiview pane's own resize handler should already catch this (a bookmarks
+    /// or right-pane toggle changes how much width the pane host has), but that depends on the
+    /// layout pass having settled by the time something reads ActualWidth/Height — deferring one
+    /// dispatcher tick and forcing an unconditional repaint on top covers the cases where it
+    /// hasn't.</summary>
+    private void RefreshAllPaneSurfaces()
+    {
+        _page?.Resize();
+        _page?.Invalidate();
+        foreach (var s in _pinnedSurfaces) s.Refresh();
     }
 
     // The row Grid has CanDrag="True", which suppresses TreeView.ItemInvoked on a tap
@@ -572,12 +594,15 @@ public sealed partial class MainWindow : Window
     }
 
     // Middle-click a bookmark opens it in a new tab, same as a middle-click on the tab strip.
+    // Middle-click a group opens every bookmark in it (recursively) each in its own new tab,
+    // same as its "Open All in new tabs" context-menu item.
     private void BookmarkRow_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
-        if (sender is not FrameworkElement { DataContext: BookmarkNode { IsFolder: false } node } row) return;
+        if (sender is not FrameworkElement { DataContext: BookmarkNode node } row) return;
         if (!e.GetCurrentPoint(row).Properties.IsMiddleButtonPressed) return;
         e.Handled = true;
-        Vm.OpenBookmarkInNewTabCommand.Execute(node.Model);
+        if (node.IsFolder) Vm.OpenGroupInNewTabs(node, sandbox: false);
+        else Vm.OpenBookmarkInNewTabCommand.Execute(node.Model);
     }
 
     private void BookmarksTree_RightTapped(object sender, RightTappedRoutedEventArgs e)
@@ -791,34 +816,60 @@ public sealed partial class MainWindow : Window
     }
 
     // ---- Multiview: pane tree rendering ----
-    // Only LeafMode.FollowActiveTab is reachable today — there's no way yet to pin a tab
-    // (Milestone 5) — but a split *is* reachable, so BuildBrowserRegion must tolerate being
-    // called again on every structural change. Every leaf-content element returned here is
-    // freshly created, every single time — never a persisted element PaneTreeView relocates
-    // between parents. WinUI's Panel.Children doesn't reliably support moving a live element
-    // between different parent Grids across a rebuild (FrameworkElement.Parent isn't kept in
-    // sync with the actual visual tree for this), so "just build a new one and attach it to the
-    // same tab" sidesteps that class of bug entirely rather than fighting it.
+    // Every leaf-content element returned here is freshly created, every single time — never a
+    // persisted element PaneTreeView relocates between parents. WinUI's Panel.Children doesn't
+    // reliably support moving a live element between different parent Grids across a rebuild
+    // (FrameworkElement.Parent isn't kept in sync with the actual visual tree for this), so "just
+    // build a new one and attach it to the same tab" sidesteps that class of bug entirely rather
+    // than fighting it.
+    private const string TabDragKey = "DiaphaneTabId";
+    private readonly List<PinnedPaneSurface> _pinnedSurfaces = new();
+
     private FrameworkElement BuildLeafContent(PaneNode node) => node.Mode switch
     {
         LeafMode.FollowActiveTab => BuildBrowserRegion(),
-        LeafMode.Empty => BuildEmptyPaneContent(),
-        _ => throw new NotSupportedException("Pinned-pane rendering lands with drag-to-pin (Milestone 5)."),
+        LeafMode.Empty => BuildEmptyPaneContent(node.Id),
+        LeafMode.Pinned => BuildPinnedPaneContent(node.PinnedTab!),
+        _ => throw new ArgumentOutOfRangeException(nameof(node)),
     };
 
-    private static FrameworkElement BuildEmptyPaneContent() => new Border
+    private FrameworkElement BuildPinnedPaneContent(TabModel tab)
     {
-        Background = (Brush)Application.Current.Resources["LayerFillColorDefaultBrush"],
-        BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
-        BorderThickness = new Thickness(1),
-        Child = new TextBlock
+        var surface = new PinnedPaneSurface(tab);
+        _pinnedSurfaces.Add(surface);
+        return surface.Region;
+    }
+
+    private FrameworkElement BuildEmptyPaneContent(Guid leafId)
+    {
+        var border = new Border
         {
-            Text = "Drag a tab here",
-            Opacity = 0.5,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-        },
-    };
+            Background = (Brush)Application.Current.Resources["LayerFillColorDefaultBrush"],
+            BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+            BorderThickness = new Thickness(1),
+            AllowDrop = true,
+            Child = new TextBlock
+            {
+                Text = "Drag a tab here",
+                Opacity = 0.5,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            },
+        };
+        border.DragOver += (_, e) =>
+        {
+            if (e.DataView.Properties.ContainsKey(TabDragKey)) e.AcceptedOperation = DataPackageOperation.Move;
+        };
+        border.Drop += (_, e) =>
+        {
+            if (e.DataView.Properties.TryGetValue(TabDragKey, out var idObj) && idObj is Guid tabId
+                && Vm.Tabs.FirstOrDefault(t => t.Id == tabId) is { } tab)
+            {
+                Vm.Panes.Pin(leafId, tab);
+            }
+        };
+        return border;
+    }
 
     /// <summary>The classic browsing surface — was declared directly in XAML under
     /// BrowserRegion; now a factory (see BuildLeafContent) called fresh every time the
@@ -992,9 +1043,16 @@ public sealed partial class MainWindow : Window
         panel.Children.Add(icon);
         panel.Children.Add(autoReloadIcon);
         panel.Children.Add(text);
-        var item = new TabViewItem { Header = panel, Tag = t };
+        var item = new TabViewItem { Header = panel, Tag = t, CanDrag = true };
         item.PointerPressed += OnTabItemPointerPressed;
         item.ContextFlyout = BuildTabContextFlyout(t);
+        // Multiview: drag this tab onto an empty pane (BuildEmptyPaneContent's drop target) to
+        // pin it there. Coexists with CanReorderTabs' own drag handling for in-strip reordering.
+        item.DragStarting += (sender, args) =>
+        {
+            if (sender is TabViewItem { Tag: TabModel tab })
+                args.Data.Properties[TabDragKey] = tab.Id;
+        };
         return item;
     }
 

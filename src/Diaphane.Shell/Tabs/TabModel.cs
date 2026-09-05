@@ -223,6 +223,16 @@ public sealed class TabManager : IDisposable
         tab?.View.SetFocus(true);
     }
 
+    /// <summary>Like <see cref="Activate"/>, but doesn't touch visibility — for the shell layer
+    /// to call once it owns computing the full visible set itself (every pinned Multiview pane,
+    /// plus whichever tab the one FollowActiveTab leaf shows), rather than have this collapse it
+    /// back down to just the tab-strip's selection.</summary>
+    public void SetActive(TabModel? tab)
+    {
+        Active = tab;
+        tab?.View.SetFocus(true);
+    }
+
     /// <summary>Marks exactly this set of tabs as visible (painting), hiding every other tab.
     /// Multiview will call this with everything currently shown across every pane; the classic,
     /// never-split case is just <see cref="Activate"/> calling it with a single tab.</summary>
