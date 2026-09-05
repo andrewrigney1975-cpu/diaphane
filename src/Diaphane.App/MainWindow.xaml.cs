@@ -30,10 +30,11 @@ public sealed partial class MainWindow : Window
     private CefSurface _dev = null!;
     private PaneTreeView _panes = null!;
 
-    // Built once by BuildBrowserRegion — the classic (never-split) browsing surface. No longer
-    // XAML-declared (PaneHost is empty in the markup) so PaneTreeView is free to parent it
-    // wherever the pane tree's one reachable leaf (FollowActiveTab) currently lives.
-    private Grid _browserRegion = null!;
+    // BuildBrowserRegion is a factory, called fresh every time PaneTreeView needs to render the
+    // FollowActiveTab leaf (construction, plus any later structural change — creating/removing a
+    // split) — never a persistent element PaneTreeView moves between parents. These fields always
+    // point at whichever instance is currently live; the previous one is simply discarded (no
+    // explicit disposal needed — CefSurface doesn't own the underlying CEF view, TabModel does).
     private ScrollViewer BrowserFocus = null!;
     private Image BrowserImage = null!;
     private ProgressBar LoadBar = null!;
@@ -72,10 +73,11 @@ public sealed partial class MainWindow : Window
         RestoreWindowGeometry();
         _cef.Engine.SetDefaultDownloadDirectory(Vm.Settings.DownloadDirectory);
 
-        _browserRegion = BuildBrowserRegion();
-        _page = new CefSurface(BrowserImage, BrowserFocus);
         _dev = new CefSurface(DevToolsImage, DevToolsFocus);
-        Address.GotFocus += (_, _) => { _page.Blur(); _dev.Blur(); };
+        Address.GotFocus += (_, _) => { _page?.Blur(); _dev.Blur(); };
+        // Triggers an immediate synchronous build of the (today, always single) FollowActiveTab
+        // leaf, which is what actually creates _page/BrowserImage/BrowserFocus/LoadBar the first
+        // time — see BuildBrowserRegion.
         _panes = new PaneTreeView(PaneHost, Vm.Panes, BuildLeafContent);
 
         Root.Loaded += (_, _) =>
@@ -789,13 +791,17 @@ public sealed partial class MainWindow : Window
     }
 
     // ---- Multiview: pane tree rendering ----
-    // Only LeafMode.FollowActiveTab is reachable today — there's no way yet to create a split
-    // or pin a tab (Milestones 4-5), so Vm.Panes is always exactly one such leaf and this is
-    // BuildBrowserRegion's element, unchanged. Empty gets a plain drop-target placeholder now;
-    // Pinned will get its own CefSurface (mirroring BuildBrowserRegion) once drag-to-pin exists.
+    // Only LeafMode.FollowActiveTab is reachable today — there's no way yet to pin a tab
+    // (Milestone 5) — but a split *is* reachable, so BuildBrowserRegion must tolerate being
+    // called again on every structural change. Every leaf-content element returned here is
+    // freshly created, every single time — never a persisted element PaneTreeView relocates
+    // between parents. WinUI's Panel.Children doesn't reliably support moving a live element
+    // between different parent Grids across a rebuild (FrameworkElement.Parent isn't kept in
+    // sync with the actual visual tree for this), so "just build a new one and attach it to the
+    // same tab" sidesteps that class of bug entirely rather than fighting it.
     private FrameworkElement BuildLeafContent(PaneNode node) => node.Mode switch
     {
-        LeafMode.FollowActiveTab => _browserRegion,
+        LeafMode.FollowActiveTab => BuildBrowserRegion(),
         LeafMode.Empty => BuildEmptyPaneContent(),
         _ => throw new NotSupportedException("Pinned-pane rendering lands with drag-to-pin (Milestone 5)."),
     };
@@ -815,8 +821,9 @@ public sealed partial class MainWindow : Window
     };
 
     /// <summary>The classic browsing surface — was declared directly in XAML under
-    /// BrowserRegion; now built once here so PaneTreeView can parent it at whatever position
-    /// the pane tree's FollowActiveTab leaf occupies.</summary>
+    /// BrowserRegion; now a factory (see BuildLeafContent) called fresh every time the
+    /// FollowActiveTab leaf needs rendering, wiring a brand-new CefSurface to the same
+    /// underlying tab each time rather than relocating a persistent element.</summary>
     private Grid BuildBrowserRegion()
     {
         var image = new Image
@@ -852,7 +859,9 @@ public sealed partial class MainWindow : Window
         {
             VerticalAlignment = VerticalAlignment.Top,
             IsIndeterminate = true,
-            Visibility = Visibility.Collapsed,
+            // A rebuild (a split created/removed) can happen mid-navigation, so reflect
+            // whatever's actually true right now rather than assuming a fresh page load.
+            Visibility = Vm.IsLoading ? Visibility.Visible : Visibility.Collapsed,
         };
 
         var region = new Grid();
@@ -863,6 +872,13 @@ public sealed partial class MainWindow : Window
         BrowserImage = image;
         BrowserFocus = focus;
         LoadBar = loadBar;
+        // The outgoing surface (if any — null only on the very first call) would otherwise stay
+        // subscribed to the tab's FramePainted forever, since TabModel.Offscreen (unlike this
+        // Image/ScrollViewer) isn't discarded across a rebuild — a real leak, one stale surface
+        // still doing paint work per split ever created.
+        _page?.Attach(null);
+        _page = new CefSurface(image, focus);
+        _page.Attach(Vm.ActiveTab?.Offscreen);
         return region;
     }
 

@@ -145,11 +145,14 @@ public sealed class PaneTree
         if (changed) RaiseChanged();
     }
 
+    /// <summary>Persists a splitter drag's final position. Deliberately does not raise
+    /// <see cref="Changed"/> — nothing about the tree's shape changed, only a stored ratio, and
+    /// the view already reflects the new position live (it drove the drag in the first place);
+    /// forcing a full rebuild here would tear down every pane's rendering for no visual gain.</summary>
     public void SetRatio(Guid internalNodeId, double ratio)
     {
         var node = Find(internalNodeId) ?? throw new ArgumentException("No pane with that id.", nameof(internalNodeId));
         if (node.Split is not { } split) throw new InvalidOperationException("That pane isn't a split.");
         split.Ratio = Math.Clamp(ratio, 0.05, 0.95);
-        RaiseChanged();
     }
 }

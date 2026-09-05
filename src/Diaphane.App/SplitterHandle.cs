@@ -8,8 +8,12 @@ namespace Diaphane.App;
 /// method so the splitter can show a resize cursor on hover.</summary>
 public sealed class SplitterHandle : Grid
 {
-    public void SetResizeCursor(bool hovering) =>
+    /// <param name="sideBySide">True for a vertical divider between side-by-side panes (drags
+    /// left/right — the west-east cursor); false for a horizontal divider between stacked panes
+    /// (drags up/down — the north-south cursor). Every existing caller resizes a column, hence
+    /// the default.</param>
+    public void SetResizeCursor(bool hovering, bool sideBySide = true) =>
         ProtectedCursor = hovering
-            ? InputSystemCursor.Create(InputSystemCursorShape.SizeWestEast)
+            ? InputSystemCursor.Create(sideBySide ? InputSystemCursorShape.SizeWestEast : InputSystemCursorShape.SizeNorthSouth)
             : null;
 }

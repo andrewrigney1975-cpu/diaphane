@@ -9,11 +9,10 @@ namespace Diaphane.App.Browser;
 
 /// <summary>Renders a <see cref="PaneTree"/> into a host <see cref="Grid"/>: one nested Grid +
 /// <see cref="SplitterHandle"/> per split, one leaf-content element (supplied by the caller) per
-/// leaf. Rebuilds the whole subtree on any structural change (<see cref="PaneTree.Changed"/>) —
-/// fine for how rarely splits are created/removed, but a drag must never fire that event on every
-/// pointer move, or it would tear down (and lose pointer capture on) the very handle being
-/// dragged. A drag instead mutates the host Grid's own row/column sizes directly and only commits
-/// into the model — via <see cref="PaneTree.SetRatio"/> — on release.</summary>
+/// leaf. Rebuilds the whole subtree on any structural change (<see cref="PaneTree.Changed"/>,
+/// which only <see cref="PaneTree.RemoveSplit"/> fires today — a splitter drag never touches the
+/// model until release, and even then only persists the final ratio without signaling a rebuild,
+/// since nothing about the tree's shape changed).</summary>
 internal sealed class PaneTreeView
 {
     private readonly Grid _host;
@@ -25,7 +24,20 @@ internal sealed class PaneTreeView
         _host = host;
         _tree = tree;
         _buildLeafContent = buildLeafContent;
-        _tree.Changed += Rebuild;
+        // A structural change is always the direct result of a splitter's own PointerPressed
+        // (Ctrl+click) — rebuilding synchronously would tear down that very handle (and
+        // everything else _host.Children.Clear() orphans) while its event is still dispatching
+        // on the call stack, which WinUI does not tolerate. Defer to the next dispatcher tick
+        // instead, after the event has fully unwound.
+        _tree.Changed += () => _host.DispatcherQueue.TryEnqueue(() =>
+        {
+            try { Rebuild(); }
+            catch (Exception ex)
+            {
+                File.AppendAllText(Path.Combine(Path.GetTempPath(), "diaphane-app.log"),
+                    $"{DateTime.Now:o} Rebuild FAILED: {ex}\n");
+            }
+        });
         Rebuild();
     }
 
@@ -38,6 +50,10 @@ internal sealed class PaneTreeView
 
     private FrameworkElement BuildNode(PaneNode node)
     {
+        // _buildLeafContent must return a freshly-created element every call — never one it
+        // previously handed back. Moving a live element between different parent Grids across a
+        // rebuild is not something WinUI reliably supports here (worth remembering if a future
+        // caller is tempted to cache/reuse content: it crashes, and not as a catchable exception).
         if (node.IsLeaf) return _buildLeafContent(node);
 
         var split = node.Split!;
@@ -84,17 +100,25 @@ internal sealed class PaneTreeView
     {
         var dragging = false;
 
-        handle.PointerEntered += (_, _) => handle.SetResizeCursor(true);
-        handle.PointerExited += (_, _) => handle.SetResizeCursor(false);
+        handle.PointerEntered += (_, _) => handle.SetResizeCursor(true, sideBySide);
+        handle.PointerExited += (_, _) => handle.SetResizeCursor(false, sideBySide);
 
         handle.PointerPressed += (_, e) =>
         {
             if (e.GetCurrentPoint(handle).Properties.PointerUpdateKind is not PointerUpdateKind.LeftButtonPressed)
                 return;
             if (InputKeyboardSource.GetKeyStateForCurrentThread(Windows.System.VirtualKey.Control)
-                    .HasFlag(VirtualKeyStates.Down))
+                    .HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down))
             {
-                _tree.RemoveSplit(nodeId); // fires Changed -> Rebuild; a real structural change
+                try
+                {
+                    _tree.RemoveSplit(nodeId); // fires Changed -> a deferred Rebuild; a real structural change
+                }
+                catch (Exception ex)
+                {
+                    File.AppendAllText(Path.Combine(Path.GetTempPath(), "diaphane-app.log"),
+                        $"{DateTime.Now:o} RemoveSplit FAILED: {ex}\n");
+                }
                 return;
             }
             dragging = true;
@@ -129,7 +153,7 @@ internal sealed class PaneTreeView
             var ratio = sideBySide
                 ? grid.ColumnDefinitions[0].Width.Value / (grid.ColumnDefinitions[0].Width.Value + grid.ColumnDefinitions[2].Width.Value)
                 : grid.RowDefinitions[0].Height.Value / (grid.RowDefinitions[0].Height.Value + grid.RowDefinitions[2].Height.Value);
-            _tree.SetRatio(nodeId, ratio); // commits + fires Changed once
+            _tree.SetRatio(nodeId, ratio); // persists the final ratio only — no rebuild
         };
     }
 }

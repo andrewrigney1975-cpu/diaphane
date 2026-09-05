@@ -125,6 +125,26 @@
                     </ToggleButton>
                     <Rectangle Height="1" Margin="8,3" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
 
+                    <!-- Multiview: splits the content area around whatever pane the live browser
+                         is currently in. Drag-to-pin (filling the blank pane it opens up) lands
+                         in a later milestone; for now these produce real, resizable, removable
+                         (Ctrl+click the splitter) splits with an empty drop-target on one side. -->
+                    <Button Style="{StaticResource ActivityBarButtonStyle}"
+                            Command="{x:Bind Vm.SplitPaneRightCommand}"
+                            AutomationProperties.Name="Split pane right" ToolTipService.ToolTip="Split pane right">
+                        <FontIcon Glyph="&#xE8A9;" FontSize="16" />
+                    </Button>
+                    <Button Style="{StaticResource ActivityBarButtonStyle}"
+                            Command="{x:Bind Vm.SplitPaneDownCommand}"
+                            AutomationProperties.Name="Split pane down" ToolTipService.ToolTip="Split pane down">
+                        <FontIcon Glyph="&#xE8A9;" FontSize="16" RenderTransformOrigin="0.5,0.5">
+                            <FontIcon.RenderTransform>
+                                <RotateTransform Angle="90" />
+                            </FontIcon.RenderTransform>
+                        </FontIcon>
+                    </Button>
+                    <Rectangle Height="1" Margin="8,3" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
+
                     <ToggleButton Style="{StaticResource ActivityBarToggleButtonStyle}"
                                   Command="{x:Bind Vm.ToggleExtensionsPanelCommand}"
                                   IsChecked="{x:Bind Vm.ShowExtensionsPanel, Mode=OneWay}"

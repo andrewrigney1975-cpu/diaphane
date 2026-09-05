@@ -281,6 +281,20 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     /// <summary>Reorder open tabs to match a tab-strip drag. UI-driven, not a user command.</summary>
     public void ReorderTabs(IReadOnlyList<TabModel> newOrder) => _tabs?.Reorder(newOrder);
 
+    // ---- Multiview: split the content area ----
+    // Splits whichever pane the live browser is currently in — there's always exactly one
+    // FollowActiveTab leaf (SplitLeaf always preserves a leaf's mode on the side that keeps its
+    // content, and nothing can turn it into a Pinned leaf until drag-to-pin lands), so "split"
+    // needs no separate notion of a focused pane yet.
+    [RelayCommand] public void SplitPaneRight() => SplitFollowLeaf(SplitOrientation.SideBySide);
+    [RelayCommand] public void SplitPaneDown() => SplitFollowLeaf(SplitOrientation.Stacked);
+
+    private void SplitFollowLeaf(SplitOrientation orientation)
+    {
+        var leaf = Panes.Leaves().FirstOrDefault(l => l.Mode == LeafMode.FollowActiveTab);
+        if (leaf is not null) Panes.SplitLeaf(leaf.Id, orientation);
+    }
+
     // ---- navigation ----
     [RelayCommand]
     public void Navigate(string? input)
