@@ -19,7 +19,7 @@ Full design: **[Architecture & Roadmap](https://claude.ai/code/artifact/7760756e
 
 ## Build & test now
 ```
-dotnet test tests/Diaphane.Shell.Tests   # 59 tests, runs against FakeEngine
+dotnet test tests/Diaphane.Shell.Tests   # 83 tests, runs against FakeEngine
 dotnet test tests/Diaphane.Core.Tests    # 1 live test (needs the engine build)
 powershell scripts/ui-smoke.ps1          # real mouse+keyboard against a running window
 powershell scripts/package.ps1           # -> dist/diaphane-<version>-win-x64.zip
@@ -45,10 +45,27 @@ checkout is only needed to produce `Diaphane.Core`'s native payload — see `eng
 **Bookmarks**
 - Left-hand panel (not a horizontal bar) — bookmarks and groups listed vertically,
   matching Docket's "This PC" panel treatment
-- Right-click a group: Create Group, Rename, Open All in new tabs / new Sandbox
-  tabs, Remove
+- Right-click a group: Create Group, Rename (also lets you recolour it), Open All
+  in new tabs / new Sandbox tabs, Remove
 - Right-click a bookmark: Open, Open in new tab, Edit (title + URL), Remove
+- Middle-click a bookmark opens it in a new tab; middle-click a group opens every
+  bookmark in it (recursively), each in its own new tab
 - Drag a bookmark or group onto another group to reparent it
+- Every group gets a random colour chip from a fixed palette, changeable from its
+  Rename dialog — shown next to the group's name, and on any tab opened from a
+  bookmark inside it, so grouped tabs stay visually traceable back to their group
+
+**Multiview**
+- Split the content area side-by-side or stacked (two rail buttons, or
+  Ctrl+Shift+Right / Ctrl+Shift+Down), splitting whichever pane the active tab is
+  currently in — nest as many splits as you like
+- Drag a tab from the strip onto a blank pane to pin it there; a pinned tab keeps
+  painting even when it isn't the strip's selection, and shows a pin icon in the
+  strip
+- Splitters are draggable to resize; Ctrl+click a splitter removes that split and
+  returns its tab(s) to normal (unpinned) operation
+- Never persisted between sessions — every window starts with a single,
+  unsplit pane
 
 **Downloads**
 - Tracked with filename, size/progress, and timestamp, most-recent-first
@@ -80,5 +97,7 @@ checkout is only needed to produce `Diaphane.Core`'s native payload — see `eng
 · M9 DevTools + codecs + Widevine opt-in · M10 settings, session restore, packaging, manual update check
 · M11 tab reorder, VS Code–style rail, bookmark groups + drag/drop, downloads, save-link/image/video-as,
   popup-to-real-tab routing, title-bar right-pane toggle
+· M12 Multiview (split/resize/pin/drag-to-pin the content area), bookmark group colours
 
-The roadmap milestones are complete. Remaining polish is tracked in `engine/STATUS.md`.
+The roadmap milestones are complete. Remaining polish is tracked in `engine/STATUS.md`
+and `BACKLOG.md`.
