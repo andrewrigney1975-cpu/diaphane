@@ -378,6 +378,12 @@ public sealed partial class ShellViewModel : ObservableObject, IDisposable
     [RelayCommand(CanExecute = nameof(CanGoForward))] public void GoForward() => ActiveTab?.Forward();
     [RelayCommand] public void Reload() => ActiveTab?.Reload();
 
+    /// <summary>Tab-strip "Reload tab…" — starts (or restarts, at a new interval) a per-tab reload
+    /// timer. Not a global setting: each tab keeps its own interval, and none of this is persisted
+    /// between sessions — every tab starts with auto-reload off.</summary>
+    public void StartTabAutoReload(TabModel tab, int seconds) => tab.StartAutoReload(seconds);
+    public void StopTabAutoReload(TabModel tab) => tab.StopAutoReload();
+
     // ---- bookmarks + history ----
     [RelayCommand]
     public void ToggleBookmark()

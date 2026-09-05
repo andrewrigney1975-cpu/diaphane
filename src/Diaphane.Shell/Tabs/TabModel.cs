@@ -1,18 +1,21 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using Diaphane.Shell.Engine;
 
 namespace Diaphane.Shell.Tabs;
 
 public enum TabKind { Standard, Sandbox }
 
-public sealed class TabModel : INotifyPropertyChanged
+public sealed class TabModel : INotifyPropertyChanged, IDisposable
 {
     private readonly IBrowserView _view;
     private string _title = "New Tab";
     private string _url = "";
     private bool _isLoading;
+    private Timer? _autoReloadTimer;
+    private int? _autoReloadSeconds;
 
     public TabModel(IBrowserView view, TabKind kind, Guid contextId)
     {
@@ -69,6 +72,31 @@ public sealed class TabModel : INotifyPropertyChanged
     public void Back() => _view.GoBack();
     public void Forward() => _view.GoForward();
     public void SetBounds(int x, int y, int width, int height) => _view.SetBounds(x, y, width, height);
+
+    /// <summary>Seconds between auto-reloads while <see cref="AutoReloadSeconds"/> is set; null when off.
+    /// Never persisted — a fresh session always starts with auto-reload disabled on every tab.</summary>
+    public int? AutoReloadSeconds { get => _autoReloadSeconds; private set => Set(ref _autoReloadSeconds, value); }
+
+    /// <summary>Start (or restart, at a new interval) reloading this tab on a timer. The reload goes
+    /// through the same <see cref="Reload"/> path a user-triggered reload would, so a page reached via
+    /// POST resubmits its form the same way.</summary>
+    public void StartAutoReload(int seconds)
+    {
+        if (seconds < 1) throw new ArgumentOutOfRangeException(nameof(seconds));
+        _autoReloadTimer?.Dispose();
+        var period = TimeSpan.FromSeconds(seconds);
+        _autoReloadTimer = new Timer(_ => Reload(), null, period, period);
+        AutoReloadSeconds = seconds;
+    }
+
+    public void StopAutoReload()
+    {
+        _autoReloadTimer?.Dispose();
+        _autoReloadTimer = null;
+        AutoReloadSeconds = null;
+    }
+
+    public void Dispose() => StopAutoReload();
 
     /// <summary>The off-screen DevTools view for this tab, when open (shell renders it in a pane).</summary>
     public IOffscreenBrowserView? DevToolsView { get; private set; }
@@ -162,6 +190,7 @@ public sealed class TabManager : IDisposable
     public void Close(TabModel tab)
     {
         Tabs.Remove(tab);
+        tab.Dispose();
         tab.View.Dispose();
 
         if (tab.IsSandbox && Tabs.All(t => t.ContextId != tab.ContextId)
@@ -204,7 +233,7 @@ public sealed class TabManager : IDisposable
 
     public void Dispose()
     {
-        foreach (var t in Tabs) t.View.Dispose();
+        foreach (var t in Tabs) { t.Dispose(); t.View.Dispose(); }
         foreach (var c in _sandboxContexts.Values) c.Dispose();
         _sandboxContexts.Clear();
     }

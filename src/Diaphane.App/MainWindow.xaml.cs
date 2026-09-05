@@ -557,6 +557,15 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    // Middle-click a bookmark opens it in a new tab, same as a middle-click on the tab strip.
+    private void BookmarkRow_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: BookmarkNode { IsFolder: false } node } row) return;
+        if (!e.GetCurrentPoint(row).Properties.IsMiddleButtonPressed) return;
+        e.Handled = true;
+        Vm.OpenBookmarkInNewTabCommand.Execute(node.Model);
+    }
+
     private void BookmarksTree_RightTapped(object sender, RightTappedRoutedEventArgs e)
     {
         var node = (e.OriginalSource as FrameworkElement)?.DataContext as BookmarkNode
@@ -859,12 +868,67 @@ public sealed partial class MainWindow : Window
             MaxWidth = 200,
             VerticalAlignment = VerticalAlignment.Center,
         };
+        var autoReloadIcon = new FontIcon
+        {
+            Glyph = "\uE72C",
+            FontSize = 11,
+            Opacity = 0.7,
+            Visibility = t.AutoReloadSeconds is not null ? Visibility.Visible : Visibility.Collapsed,
+            Margin = new Thickness(0, 0, 6, 0),
+        };
         var panel = new StackPanel { Orientation = Orientation.Horizontal };
         panel.Children.Add(icon);
+        panel.Children.Add(autoReloadIcon);
         panel.Children.Add(text);
         var item = new TabViewItem { Header = panel, Tag = t };
         item.PointerPressed += OnTabItemPointerPressed;
+        item.ContextFlyout = BuildTabContextFlyout(t);
         return item;
+    }
+
+    // ---- tab strip context menu: auto-reload ----
+    private MenuFlyout BuildTabContextFlyout(TabModel t)
+    {
+        var flyout = new MenuFlyout();
+
+        var reload = new MenuFlyoutItem { Text = "Reload tab…" };
+        reload.Click += async (_, _) => await PromptAndStartAutoReloadAsync(t);
+        flyout.Items.Add(reload);
+
+        var stop = new MenuFlyoutItem { Text = "Stop auto-reload", IsEnabled = t.AutoReloadSeconds is not null };
+        stop.Click += (_, _) => Vm.StopTabAutoReload(t);
+        flyout.Items.Add(stop);
+
+        // Keep "Stop auto-reload"'s enabled state current — the flyout instance is built once
+        // and reused for the lifetime of the tab, so it won't naturally pick up later changes.
+        flyout.Opening += (_, _) => stop.IsEnabled = t.AutoReloadSeconds is not null;
+
+        return flyout;
+    }
+
+    private async Task PromptAndStartAutoReloadAsync(TabModel t)
+    {
+        var box = new NumberBox
+        {
+            Header = "Reload every (seconds)",
+            Value = t.AutoReloadSeconds ?? 30,
+            Minimum = 1,
+            SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline,
+            Width = 260,
+        };
+        var dialog = new ContentDialog
+        {
+            XamlRoot = Content.XamlRoot,
+            Title = "Reload tab",
+            Content = box,
+            PrimaryButtonText = "Start",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+        };
+
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return;
+        if (double.IsNaN(box.Value) || box.Value < 1) return;
+        Vm.StartTabAutoReload(t, (int)box.Value);
     }
 
     // Middle-click anywhere on a tab closes it, same as every other browser.
@@ -878,10 +942,21 @@ public sealed partial class MainWindow : Window
 
     private void OnTabModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (sender is not TabModel t || e.PropertyName != nameof(TabModel.Title)) return;
-        if (_tabItems.TryGetValue(t, out var item) &&
-            item.Header is StackPanel { Children: [_, TextBlock tb] })
-            tb.Text = t.Title;
+        if (sender is not TabModel t) return;
+        if (!_tabItems.TryGetValue(t, out var item) ||
+            item.Header is not StackPanel { Children: [_, FontIcon autoReloadIcon, TextBlock tb] }) return;
+
+        switch (e.PropertyName)
+        {
+            case nameof(TabModel.Title):
+                tb.Text = t.Title;
+                break;
+            case nameof(TabModel.AutoReloadSeconds):
+                autoReloadIcon.Visibility = t.AutoReloadSeconds is not null ? Visibility.Visible : Visibility.Collapsed;
+                ToolTipService.SetToolTip(autoReloadIcon,
+                    t.AutoReloadSeconds is { } s ? $"Auto-reloading every {s}s" : null);
+                break;
+        }
     }
 
     // ---- tab strip drag-to-reorder ----

@@ -181,6 +181,7 @@
                             <Grid Background="Transparent" Padding="2,3" ColumnSpacing="8"
                                   CanDrag="True" DragStarting="BookmarkRow_DragStarting"
                                   DropCompleted="BookmarkRow_DropCompleted" Tapped="BookmarkRow_Tapped"
+                                  PointerPressed="BookmarkRow_PointerPressed"
                                   AllowDrop="True" DragEnter="BookmarkRow_DragOver"
                                   DragOver="BookmarkRow_DragOver" Drop="BookmarkRow_Drop">
                                 <Grid.ColumnDefinitions>
