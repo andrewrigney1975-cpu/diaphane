@@ -750,6 +750,12 @@ public sealed partial class MainWindow : Window
         _draggedBookmark = null;
     }
 
+    // ---- splitter cursor feedback (both splitters resize a column width) ----
+    private void OnSplitterPointerEntered(object sender, PointerRoutedEventArgs e) =>
+        ((SplitterHandle)sender).SetResizeCursor(true);
+    private void OnSplitterPointerExited(object sender, PointerRoutedEventArgs e) =>
+        ((SplitterHandle)sender).SetResizeCursor(false);
+
     // ---- bookmarks panel splitter ----
     private bool _draggingBookmarksSplitter;
     private void OnBookmarksSplitterPressed(object sender, PointerRoutedEventArgs e)

@@ -199,9 +199,10 @@
             </TreeView>
         </Grid>
 
-        <Rectangle Grid.Row="2" Grid.Column="1" x:Name="BookmarksSplitter" Width="6" HorizontalAlignment="Right"
-                   Fill="{ThemeResource DividerStrokeColorDefaultBrush}"
+        <local:SplitterHandle Grid.Row="2" Grid.Column="1" x:Name="BookmarksSplitter" Width="6" HorizontalAlignment="Right"
+                   Background="{ThemeResource DividerStrokeColorDefaultBrush}"
                    Visibility="{x:Bind local:MainWindow.VisIf(Vm.ShowBookmarksBar), Mode=OneWay}"
+                   PointerEntered="OnSplitterPointerEntered" PointerExited="OnSplitterPointerExited"
                    PointerPressed="OnBookmarksSplitterPressed"
                    PointerMoved="OnBookmarksSplitterMoved"
                    PointerReleased="OnBookmarksSplitterReleased" />
@@ -281,9 +282,10 @@
                              Visibility="Collapsed" />
             </Grid>
 
-            <Border x:Name="DevToolsSplitter" Grid.Column="1" Width="6"
+            <local:SplitterHandle x:Name="DevToolsSplitter" Grid.Column="1" Width="6"
                     Background="{ThemeResource DividerStrokeColorDefaultBrush}"
                     Visibility="Collapsed"
+                    PointerEntered="OnSplitterPointerEntered" PointerExited="OnSplitterPointerExited"
                     PointerPressed="OnDevSplitterPressed"
                     PointerMoved="OnDevSplitterMoved"
                     PointerReleased="OnDevSplitterReleased" />
